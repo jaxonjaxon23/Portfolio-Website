@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jaxon Stickler — Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: #0b0c0d; }
+  body { background: transparent; color: #fff; -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; overflow-x: hidden; }
+  ::selection { background: rgba(255,255,255,0.18); }
+  /* slim scrollbar to keep the gallery feeling quiet */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  img { user-select: none; }
+  @keyframes locPulseRing {
+    0%   { transform: scale(1); opacity: 0.7; }
+    70%  { transform: scale(3.4); opacity: 0; }
+    100% { transform: scale(3.4); opacity: 0; }
+  }
+  /* ---- preloader ---- */
+  #preloader {
+    position: fixed; inset: 0; z-index: 100000;
+    background: #0b0c0d; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    transition: opacity .6s ease; cursor: none;
+  }
+  #preloader.hidden { opacity: 0; pointer-events: none; }
+  #preloader .pl-label {
+    font-family: Inter, sans-serif; font-size: 11px; letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.5); text-transform: uppercase;
+  }
+  #preloader .pl-track {
+    width: 180px; height: 1px; background: rgba(255,255,255,0.16); overflow: hidden;
+  }
+  #preloader .pl-fill {
+    width: 0%; height: 100%; background: #fff; transition: width .25s ease;
+  }
+</style>
+<link id="gfont-Inter" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap">
+</head>
+<body style="font-family: Inter; font-size: 14px">
+<div id="root"></div>
+<div id="preloader">
+  <div class="pl-track"><div class="pl-fill" id="pl-fill"></div></div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="layout.js"></script>
+<script src="content.js"></script>
+<script src="projects.js"></script>
+<script src="supabase-config.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2.45.0/dist/umd/supabase.js"></script>
+<script src="remote-content.js"></script>
+<script src="depth-cloud.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="portfolio-parts.jsx"></script>
+<script type="text/babel" src="diagram.jsx"></script>
+<script type="text/babel" src="index-grid.jsx"></script>
+<script type="text/babel" src="project-page.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+<script>
+(function () {
+  var fill = document.getElementById('pl-fill');
+  var pre = document.getElementById('preloader');
+  if (!pre) return;
+  var done = false;
+  function finish() {
+    if (done) return; done = true;
+    if (fill) fill.style.width = '100%';
+    setTimeout(function () {
+      pre.classList.add('hidden');
+      setTimeout(function () { if (pre.parentNode) pre.parentNode.removeChild(pre); }, 700);
+    }, 180);
+  }
+  function preload() {
+    var urls = [];
+    var GLOBAL_LIMIT = 6; // matches TWEAK_DEFAULTS.imageLimit
+    try {
+      (window.PROJECTS || []).forEach(function (p) {
+        if (p.main && p.main.src) urls.push(p.main.src);
+        (p.sats || []).forEach(function (s) { if (s.src) urls.push(s.src); });
+        // Preload EVERY image in every gallery so opening any project page
+        // (and scrolling its gallery) never shows pop-in. Videos/embeds are
+        // skipped — they stream on demand and can't be fully prefetched.
+        (p.gallery || []).forEach(function (g) {
+          if (g && g.type === 'image' && g.src) urls.push(g.src);
+        });
+      });
+    } catch (e) {}
+    // de-dupe
+    urls = urls.filter(function (u, i) { return u && urls.indexOf(u) === i; });
+    // entity iframes render on the About page — warm them so they don't pop in
+    var frames = ['entities/vector-entity-1.html', 'entities/vector-entity-2.html'];
+    var total = urls.length + frames.length, loaded = 0;
+    if (!total) { finish(); return; }
+    // hard cap so a slow/missing asset can't trap the user (full preload is large)
+    var cap = setTimeout(finish, 20000);
+    function tick() {
+      loaded++;
+      if (fill) fill.style.width = Math.round((loaded / total) * 100) + '%';
+      if (loaded >= total) { clearTimeout(cap); finish(); }
+    }
+    urls.forEach(function (u) {
+      var im = new Image();
+      im.onload = tick; im.onerror = tick; im.src = u;
+    });
+    var warm = document.createElement('div');
+    warm.setAttribute('aria-hidden', 'true');
+    warm.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;opacity:0;pointer-events:none;overflow:hidden;';
+    document.body.appendChild(warm);
+    frames.forEach(function (src) {
+      var f = document.createElement('iframe');
+      var settled = false;
+      var one = function () { if (settled) return; settled = true; tick(); };
+      f.onload = function () { setTimeout(one, 400); }; // give the in-frame SVG a beat to paint
+      f.onerror = one;
+      f.src = src;
+      warm.appendChild(f);
+      setTimeout(one, 6000); // per-frame safety
+    });
+  }
+  function startPreload() {
+    if (window.__remoteReady || !window.SUPABASE_URL) { preload(); }
+    else {
+      var did = false;
+      var go = function () { if (did) return; did = true; preload(); };
+      window.addEventListener('remote-content-ready', go, { once: true });
+      setTimeout(go, 7000);
+    }
+  }
+  if (document.readyState === 'complete') startPreload();
+  else window.addEventListener('load', startPreload);
+})();
+</script>
+</body>
+</html>
