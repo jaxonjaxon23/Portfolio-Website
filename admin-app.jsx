@@ -3,11 +3,12 @@
 const { useState: useMState, useEffect: useMEffect, useRef: useMRef } = React;
 
 // ---------------------------------------------------------------------------
-// CHANGE THIS PASSWORD. Note: this is light obscurity, not real security — the
-// site is static so anyone determined can read the source. Don't link to
-// admin.html from the public site, and keep the password to yourself.
-const ADMIN_PASSWORD = 'studio';
+// Auth + saving run through Supabase. Fill in supabase-config.js, then create
+// your login user in the Supabase dashboard (Authentication → Users → Add user).
 // ---------------------------------------------------------------------------
+const SB = (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase)
+  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY)
+  : null;
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -20,28 +21,37 @@ const LAYOUT_PRESETS = {
 };
 
 function Login({ onOk }) {
+  const [email, setEmail] = useMState('');
   const [pw, setPw] = useMState('');
-  const [err, setErr] = useMState(false);
-  const submit = () => {
-    if (pw === ADMIN_PASSWORD) { try { sessionStorage.setItem('cms-auth', '1'); } catch (_) {} onOk(); }
-    else setErr(true);
+  const [err, setErr] = useMState('');
+  const [busy, setBusy] = useMState(false);
+  const submit = async () => {
+    if (!SB) { setErr('Supabase not configured — fill in supabase-config.js'); return; }
+    setBusy(true); setErr('');
+    const { error } = await SB.auth.signInWithPassword({ email: email.trim(), password: pw });
+    setBusy(false);
+    if (error) setErr(error.message || 'Sign-in failed'); else onOk();
   };
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 320, textAlign: 'center' }}>
         <div style={{ fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 22 }}>Portfolio CMS</div>
-        <input className="ad-input" type="password" autoFocus placeholder="Password" value={pw}
-          onChange={(e) => { setPw(e.target.value); setErr(false); }} onKeyDown={(e) => e.key === 'Enter' && submit()}
+        <input className="ad-input" type="email" autoFocus placeholder="Email" value={email}
+          onChange={(e) => { setEmail(e.target.value); setErr(''); }} onKeyDown={(e) => e.key === 'Enter' && submit()}
+          style={{ textAlign: 'center', marginBottom: 10 }} />
+        <input className="ad-input" type="password" placeholder="Password" value={pw}
+          onChange={(e) => { setPw(e.target.value); setErr(''); }} onKeyDown={(e) => e.key === 'Enter' && submit()}
           style={{ textAlign: 'center', borderColor: err ? 'var(--danger)' : undefined }} />
-        {err && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>Wrong password</div>}
-        <button className="ad-btn" style={{ width: '100%', marginTop: 14 }} onClick={submit}>Enter</button>
+        {err && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{err}</div>}
+        <button className="ad-btn" disabled={busy} style={{ width: '100%', marginTop: 14 }} onClick={submit}>{busy ? 'Signing in…' : 'Sign in'}</button>
       </div>
     </div>
   );
 }
 
 function App() {
-  const [authed, setAuthed] = useMState(() => { try { return sessionStorage.getItem('cms-auth') === '1'; } catch (_) { return false; } });
+  const [authed, setAuthed] = useMState(false);
+  const [authReady, setAuthReady] = useMState(!SB);
   const [content, setContent] = useMState(() => clone(window.SITE_CONTENT));
   const [positions, setPositions] = useMState(() => {
     // start from baked diagram positions, fill any missing from defaults
@@ -58,6 +68,30 @@ function App() {
   const [selId, setSelId] = useMState(null);
   const [busy, setBusy] = useMState(false);
 
+  // Check existing Supabase session, and load the LIVE published content so the
+  // editor starts from what's currently on the site (not just the bundle).
+  useMEffect(() => {
+    if (!SB) return;
+    SB.auth.getSession().then(({ data }) => {
+      if (data && data.session) setAuthed(true);
+      setAuthReady(true);
+    });
+    const { data: sub } = SB.auth.onAuthStateChange((_e, session) => setAuthed(!!session));
+    SB.from('content').select('data').eq('id', 1).single().then((res) => {
+      const d = res && res.data && res.data.data;
+      if (!d) return;
+      if (d.location || d.bio || d.projects) {
+        setContent({
+          location: d.location || {}, bio: d.bio || {},
+          projects: Array.isArray(d.projects) ? d.projects : [],
+        });
+      }
+      if (d.positions) setPositions((m) => ({ ...m, ...d.positions }));
+    });
+    return () => { try { sub.subscription.unsubscribe(); } catch (_) {} };
+  }, []);
+
+  if (SB && !authReady) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>Loading…</div>;
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
 
   const projects = content.projects;
@@ -98,61 +132,44 @@ function App() {
     setSelId(null);
   };
 
-  // ---- export ----
-  const buildContentJs = () => {
-    const header =
-      '// SITE CONTENT — single source of truth for the portfolio.\n' +
-      '// Edited by admin.html (the CMS). projects.js + the bio components read from\n' +
-      '// window.SITE_CONTENT.\n' +
-      '// Gallery items: { type: "image"|"video"|"vimeo"|"youtube", src }\n\n';
-    return header + 'window.SITE_CONTENT = ' + JSON.stringify(content, null, 2) + ';\n';
-  };
-  const buildLayoutJs = () => {
-    // keep only id-keyed stable layout data; ordering is driven by the arrays
-    const baked = window.BAKED_LAYOUT || {};
-    const out = {};
-    Object.keys(baked).forEach((k) => {
-      if (/^(preview-count-|large-entity-pos|project-links-)/.test(k)) out[k] = baked[k];
-    });
-    const posObj = {};
-    projects.forEach((p, i) => { posObj[p.id] = positions[p.id] || window.defaultPosFor(i); });
-    out['diagram-node-pos-v1'] = JSON.stringify(posObj);
-    const header =
-      '// BAKED LAYOUT SNAPSHOT — generated by the CMS. Ordering now lives in the\n' +
-      '// content arrays, so index/gallery order keys are intentionally omitted.\n' +
-      '// Captured: ' + new Date().toISOString() + '\n';
-    return header + 'window.BAKED_LAYOUT = ' + JSON.stringify(out, null, 2) + ';\n\n' +
-      'window.layoutGet = function (key) {\n' +
-      '  try { var v = localStorage.getItem(key); if (v !== null && v !== undefined) return v; } catch (_) {}\n' +
-      '  if (window.BAKED_LAYOUT && Object.prototype.hasOwnProperty.call(window.BAKED_LAYOUT, key)) return window.BAKED_LAYOUT[key];\n' +
-      '  return null;\n};\n';
-  };
-
+  // ---- save to Supabase ----
+  // Upload any new image Files to storage, swap their temp srcs for public URLs,
+  // then upsert the whole content doc (incl. diagram positions) into one row.
   const publish = async () => {
+    if (!SB) { alert('Supabase not configured — fill in supabase-config.js'); return; }
     setBusy(true);
     try {
-      const zip = new JSZip();
-      zip.file('content.js', buildContentJs());
-      zip.file('layout.js', buildLayoutJs());
       const map = imgMapRef.current;
-      let added = 0;
-      Object.keys(map).forEach((path) => {
-        // only include images still referenced somewhere
-        const used = projects.some((p) => (p.gallery || []).some((g) => g.src === path))
-          || (content.bio.working || []).some((w) => w.img === path);
-        if (used && map[path].file) { zip.file(path, map[path].file); added++; }
-      });
-      const blob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'portfolio-update.zip';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 6000);
+      const replace = {};
+      const usedPath = (path) => projects.some((p) => (p.gallery || []).some((g) => g.src === path))
+        || (content.bio.working || []).some((w) => w.img === path);
+      for (const path of Object.keys(map)) {
+        if (!map[path].file || !usedPath(path)) continue;
+        const key = path.replace(/^images\//, '');
+        const up = await SB.storage.from('images').upload(key, map[path].file, { upsert: true, contentType: map[path].file.type || undefined });
+        if (up.error) throw new Error('Image upload failed: ' + up.error.message);
+        const { data: pub } = SB.storage.from('images').getPublicUrl(key);
+        replace[path] = pub.publicUrl;
+      }
+      // deep clone + swap temp srcs for public URLs
+      const out = clone(content);
+      (out.projects || []).forEach((p) => (p.gallery || []).forEach((g) => { if (replace[g.src]) g.src = replace[g.src]; }));
+      (out.bio && out.bio.working || []).forEach((w) => { if (replace[w.img]) w.img = replace[w.img]; });
+      const posObj = {};
+      projects.forEach((p, i) => { posObj[p.id] = positions[p.id] || window.defaultPosFor(i); });
+
+      const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj };
+      const { error } = await SB.from('content').upsert({ id: 1, data: doc, updated_at: new Date().toISOString() });
+      if (error) throw new Error(error.message);
+
+      // point local state at the uploaded URLs so re-saving won't re-upload
+      setContent(out);
+      Object.keys(replace).forEach((path) => { delete map[path]; });
       setBusy(false);
-      alert('Downloaded portfolio-update.zip\n\nIt contains:\n• content.js (your text + image references)\n• layout.js (diagram positions)\n• ' + added + ' new image file(s) in images/…\n\nUnzip it and upload these into your site folder, replacing the old content.js and layout.js. Done!');
+      alert('Saved ✓  Your changes are live — refresh the site to see them.');
     } catch (e) {
       setBusy(false);
-      alert('Export failed: ' + e.message);
+      alert('Save failed: ' + e.message);
     }
   };
 
@@ -165,7 +182,7 @@ function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header tab={tab} setTab={setTab} tabs={TABS} onLogout={() => { try { sessionStorage.removeItem('cms-auth'); } catch (_) {} setAuthed(false); }} />
+      <Header tab={tab} setTab={setTab} tabs={TABS} onLogout={async () => { if (SB) { try { await SB.auth.signOut(); } catch (_) {} } setAuthed(false); }} />
       <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 80px' }}>
 
         {tab === 'site' &&
@@ -217,18 +234,17 @@ function App() {
 
         {tab === 'publish' &&
           <div>
-            <SectionTitle sub="Generates the files to upload to your server. Nothing leaves your computer until you upload them.">Publish</SectionTitle>
+            <SectionTitle sub="Saves everything to your Supabase project. Changes go live on the site immediately — just refresh.">Publish</SectionTitle>
             <Card>
               <div style={{ marginBottom: 16, lineHeight: 1.7 }}>
                 <div><b>{projects.length}</b> projects</div>
-                <div><b>{newImageCount}</b> new image/video file(s) added this session</div>
+                <div><b>{newImageCount}</b> new image/video file(s) to upload this save</div>
               </div>
-              <button className="ad-btn" disabled={busy} onClick={publish}>{busy ? 'Building…' : 'Download update package (.zip)'}</button>
+              <button className="ad-btn" disabled={busy} onClick={publish}>{busy ? 'Saving…' : 'Save changes (publish live)'}</button>
               <ol style={{ margin: '20px 0 0 18px', color: 'var(--dim)', lineHeight: 1.9, maxWidth: 640 }}>
-                <li>Click the button — you get <code>portfolio-update.zip</code>.</li>
-                <li>Unzip it. Inside: <code>content.js</code>, <code>layout.js</code>, and an <code>images/</code> folder with any new files.</li>
-                <li>Upload these into your site folder on the server, replacing the old <code>content.js</code> and <code>layout.js</code> and merging the <code>images/</code> folder.</li>
-                <li>Refresh the site — your changes are live.</li>
+                <li>Click <b>Save</b> — new images upload to Supabase storage, then all content is saved.</li>
+                <li>Refresh the live site — your changes are already there.</li>
+                <li>No file uploads to the server needed. Edit from anywhere you can log in.</li>
               </ol>
             </Card>
           </div>}

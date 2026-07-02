@@ -1,74 +1,88 @@
-# Jaxon Stickler — Portfolio
+# Jaxon Stickler — Portfolio (Vercel + Supabase + GitHub)
 
-Static site. No build step, no backend. Plain HTML/CSS/JS with React + Babel
-loaded from CDN at runtime. Includes a built-in CMS (`admin.html`) for editing
-content without touching code.
-
----
-
-## Deploy to your server
-
-It's a static site — upload the whole folder to your web root and point the
-domain at it. `index.html` is the entry point.
-
-- Must be served over **http(s)** (any normal web server). It will **not** work
-  by double-clicking `index.html` from disk — the scripts and WebGL background
-  are blocked on `file://`.
-- Visitors' browsers fetch React, Babel, and fonts from public CDNs, so an
-  internet connection is required.
-- The `.nojekyll` file matters only on GitHub Pages (ignore it elsewhere).
+Static site with a live CMS. Content is stored in **Supabase** and edited from
+**`admin.html`** — log in from anywhere, hit Save, and the change is live on the
+next refresh. No re-uploading files. The repo lives on **GitHub** and deploys to
+**Vercel** automatically.
 
 ---
 
-## Editing content — the CMS
+## One-time setup (about 15 minutes)
 
-Open **`admin.html`** in a browser (e.g. `https://your-site.com/admin.html`).
+### 1. Supabase (the content backend)
+1. Create a free account at **supabase.com** → **New project**. Pick a region
+   near your visitors and save the database password it gives you.
+2. When it's ready: **SQL Editor → New query** → paste all of
+   **`supabase-setup.sql`** → **Run**. (Creates the content table + image bucket
+   + security rules.)
+3. **Authentication → Users → Add user** → create YOUR login (email + password).
+   This is the account you'll sign into the CMS with.
+4. **Settings → API** → copy two values into **`supabase-config.js`**:
+   - **Project URL** → `SUPABASE_URL`
+   - **anon public key** → `SUPABASE_ANON_KEY`  (safe to commit — it's a public key)
 
-- **Password:** `studio` — change it by editing the `ADMIN_PASSWORD` line near
-  the top of `admin-app.jsx`. (This is light obscurity, not real security: the
-  site is static, so don't link to `admin.html` from the public site and keep
-  the password to yourself.)
+### 2. GitHub (the repo)
+1. Create a new GitHub repository.
+2. Put **all the files in this folder** at the repo root (via GitHub Desktop is
+   easiest — drag them into the local repo folder, commit, publish). `index.html`
+   must be at the top level, not inside a subfolder.
 
-Tabs:
-- **Site & Bio** — location + timezone (drives the live clock), name, role,
-  statement, "working on" items (each can have a hover image), contact.
-- **Projects** — edit any project's text and gallery; drag gallery items to
-  reorder (the first item is the index thumbnail); add images/videos by drag &
-  drop, or paste a YouTube/Vimeo URL; add brand-new projects (with a thumbnail
-  layout choice); delete projects.
-- **Diagram** — drag any node to set where that project sits on the About-page
-  constellation.
-- **Index order** — drag to set the left-to-right column order on the Index page.
-- **Publish** — click **Download update package (.zip)**.
+### 3. Vercel (hosting)
+1. Create a free account at **vercel.com** → **Add New… → Project**.
+2. **Import** your GitHub repo. No build settings needed — it's a static site, so
+   leave Framework Preset as **Other** and just click **Deploy**.
+3. You get a live URL like `your-project.vercel.app`. Every future `git push`
+   redeploys automatically.
 
-### Publishing your edits
+That's it. The site is live and reads its content from Supabase.
 
-The CMS never talks to the server (it can't — the server is static). Instead it
-hands you the changed files to upload:
+---
 
-1. On the **Publish** tab, click **Download update package (.zip)**.
-2. Unzip it. Inside: `content.js`, `layout.js`, and an `images/` folder with any
-   new images/videos you added.
-3. Upload those into your site folder on the server, **replacing** the old
-   `content.js` and `layout.js` and **merging** the `images/` folder.
-4. Refresh the site — your changes are live.
+## Editing the site
 
-That's the one manual step. For occasional edits it takes about 30 seconds.
+Go to **`https://your-project.vercel.app/admin.html`** and sign in with the
+Supabase user you created.
+
+- **Site & Bio** — location + timezone (drives the clock), name, role, statement,
+  "working on" items (each can have a hover image), contact details.
+- **Projects** — edit text, drag-reorder galleries (first item = index thumbnail),
+  drag-drop new images/videos, paste YouTube/Vimeo URLs, add or delete projects.
+- **Diagram** — drag nodes to position projects on the About-page constellation.
+- **Index order** — drag to set the column order on the Index page.
+- **Publish** — click **Save changes**. New images upload to Supabase storage,
+  then all content is saved. Refresh the site to see it live.
+
+Images you upload through the CMS are served from Supabase; the images that
+shipped with the site are still served as static files from the repo. Both work
+side by side.
+
+---
+
+## Keep the free Supabase project awake
+
+Free Supabase projects **pause after 7 days with no activity**, which would make
+the site's content fail to load until you unpause it. Prevent that with a free
+uptime pinger:
+
+- Easiest: **UptimeRobot** (free) → add an HTTP monitor pointing at your Vercel
+  URL every few days. Loading the site queries Supabase, which resets the timer.
 
 ---
 
 ## How it fits together
 
-- `content.js` — **all editable content** (location, bio, projects). Single
-  source of truth, written by the CMS. Safe to hand-edit too.
-- `layout.js` — diagram node positions (and a few other saved bits).
-- `projects.js` — adapter that turns `content.js` into the data the site uses.
-- `index.html` + the `.jsx`/`.js` files — the site itself.
-- `admin*.{html,jsx}` — the CMS (only you use these; visitors never see them).
+- `supabase-config.js` — your Supabase URL + anon key (you fill this in).
+- `remote-content.js` — the site reads content from Supabase on load; falls back
+  to the bundled `content.js` if Supabase is unreachable.
+- `content.js` — offline fallback snapshot of the content (safe to leave as-is).
+- `admin*.{html,jsx}` — the CMS. Only you use it (sign-in required to save).
+- `index.html` + `.jsx`/`.js` — the site itself.
+- `supabase-setup.sql` — the one-time database setup.
 
-## Want instant, log-in-from-anywhere editing later?
+## Notes
 
-That needs a small backend, which a purely static server can't run. The minimal
-free add-on is a service like Supabase — the site can read content from it and
-the CMS can save to it directly, removing the download-and-upload step. Ask and
-it can be wired in without rebuilding the site.
+- Must be served over http(s) (Vercel does this). Won't work by double-clicking
+  `index.html` from disk.
+- The anon key is meant to be public; your data is protected by the security
+  rules in `supabase-setup.sql` (anyone can read, only your signed-in account can
+  write).

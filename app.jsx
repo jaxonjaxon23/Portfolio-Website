@@ -299,4 +299,16 @@ function App() {
 
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+(function () {
+  function boot() {
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  }
+  // Wait for remote content (Supabase) if configured; fall back to bundled data.
+  if (window.__remoteReady || !window.SUPABASE_URL) boot();
+  else {
+    var did = false;
+    var go = function () { if (did) return; did = true; boot(); };
+    window.addEventListener('remote-content-ready', go, { once: true });
+    setTimeout(go, 7000); // safety net
+  }
+})();

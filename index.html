@@ -57,6 +57,9 @@
 <script src="layout.js"></script>
 <script src="content.js"></script>
 <script src="projects.js"></script>
+<script src="supabase-config.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2.45.0/dist/umd/supabase.js"></script>
+<script src="remote-content.js"></script>
 <script src="depth-cloud.js"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="portfolio-parts.jsx"></script>
@@ -126,8 +129,17 @@
       setTimeout(one, 6000); // per-frame safety
     });
   }
-  if (document.readyState === 'complete') preload();
-  else window.addEventListener('load', preload);
+  function startPreload() {
+    if (window.__remoteReady || !window.SUPABASE_URL) { preload(); }
+    else {
+      var did = false;
+      var go = function () { if (did) return; did = true; preload(); };
+      window.addEventListener('remote-content-ready', go, { once: true });
+      setTimeout(go, 7000);
+    }
+  }
+  if (document.readyState === 'complete') startPreload();
+  else window.addEventListener('load', startPreload);
 })();
 </script>
 </body>
