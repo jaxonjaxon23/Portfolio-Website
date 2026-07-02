@@ -323,7 +323,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
         style={{ marginLeft: 408, marginRight: 24, paddingTop: 19, paddingBottom: 120, maxWidth: 1180 }}>
         {gallery.map((item, displayIdx) => {
           const origIdx = order[displayIdx];
-          const widthPct = sizes[origIdx] != null ? sizes[origIdx] : 100;
+          const widthPct = item.w != null ? item.w : (sizes[origIdx] != null ? sizes[origIdx] : 100);
           return (
             <div
               key={origIdx}

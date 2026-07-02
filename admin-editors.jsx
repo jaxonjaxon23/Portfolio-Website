@@ -104,6 +104,11 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
   const [dragFrom, setDragFrom] = useAState(null);
   const [over, setOver] = useAState(null);
   const [embedUrl, setEmbedUrl] = useAState('');
+  const [mode, setMode] = useAState('arrange'); // 'arrange' | 'preview'
+  const [nat, setNat] = useAState({}); // src -> { w, h }
+  const REAL_COL = 1180; // desktop gallery column max width on the live site
+  const setW = (i, w) => onChange(gallery.map((it, j) => j === i ? { ...it, w } : it));
+  const noteNat = (src, w, h) => setNat((m) => (m[src] && m[src].w === w) ? m : { ...m, [src]: { w, h } });
 
   const move = (from, to) => {
     if (from == null || to == null || from === to) return;
@@ -133,7 +138,18 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
 
   return (
     <div>
-      <label className="ad-field-label">Gallery — drag to reorder · first item is the index thumbnail</label>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <label className="ad-field-label" style={{ margin: 0 }}>Gallery — first item is the index thumbnail</label>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--panel2)', borderRadius: 8, padding: 3 }}>
+          {[['arrange', 'Arrange'], ['preview', 'Page preview']].map(([m, lbl]) => (
+            <button key={m} onClick={() => setMode(m)}
+              style={{ border: 'none', cursor: 'pointer', borderRadius: 6, padding: '5px 12px', fontSize: 12,
+                background: mode === m ? '#fff' : 'transparent', color: mode === m ? '#000' : 'var(--dim)', fontWeight: mode === m ? 600 : 400 }}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'arrange' &&
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 10, marginBottom: 14 }}>
         {gallery.map((it, i) => (
           <div key={i}
@@ -153,6 +169,8 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
             <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, background: 'rgba(0,0,0,0.7)', padding: '2px 5px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em', color: it.type === 'image' ? 'var(--dim)' : 'var(--accent)' }}>
               {i === 0 ? 'thumb' : it.type}
             </div>
+            {it.w != null && it.w < 100 &&
+            <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, background: 'rgba(0,0,0,0.7)', padding: '2px 5px', borderRadius: 4, color: 'var(--accent)' }}>{it.w}%</div>}
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', padding: 4, gap: 4 }}>
               {i !== 0 && <button onClick={() => setMain(i)} title="Make index thumbnail" style={miniBtn}>★</button>}
               <span style={{ flex: 1 }} />
@@ -160,12 +178,60 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
+
+      {mode === 'preview' &&
+      <div style={{ background: '#000', borderRadius: 10, padding: '18px 0', marginBottom: 14, maxHeight: 560, overflowY: 'auto' }}>
+        <div style={{ margin: '0 auto', width: '78%' }}>
+          {gallery.map((it, i) => {
+            const w = it.w != null ? it.w : 100;
+            const n = nat[it.src];
+            const realPx = Math.round(REAL_COL * w / 100);
+            const low = n && (it.type === 'image' || it.type === 'video') && n.w < realPx * 0.9;
+            const resolved = (imgMap && imgMap[it.src] && imgMap[it.src].url) || it.src;
+            const isVid = imgMap && imgMap[it.src] ? imgMap[it.src].isVideo : isVideoName(it.src || '');
+            return (
+              <div key={i} style={{ marginBottom: 16 }}>
+                <div style={{ width: w + '%' }}>
+                  {it.type === 'image' && !isVid &&
+                    <img src={resolved} alt="" draggable="false" onLoad={(e) => noteNat(it.src, e.target.naturalWidth, e.target.naturalHeight)}
+                      style={{ width: '100%', display: 'block', borderRadius: 3 }} />}
+                  {(it.type === 'video' || isVid) &&
+                    <video src={resolved} autoPlay loop muted playsInline
+                      ref={(el) => { if (el) { el.muted = true; el.volume = 0; } }}
+                      onLoadedMetadata={(e) => { e.target.muted = true; e.target.volume = 0; noteNat(it.src, e.target.videoWidth, e.target.videoHeight); }}
+                      style={{ width: '100%', display: 'block', borderRadius: 3 }} />}
+                  {(it.type === 'vimeo' || it.type === 'youtube') &&
+                    <div style={{ width: '100%', paddingBottom: '56.25%', position: 'relative', background: '#111', borderRadius: 3 }}>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{it.type} embed</div>
+                    </div>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, padding: '0 2px' }}>
+                  <span style={{ fontSize: 10, color: 'var(--dim2)', width: 18 }}>{i + 1}</span>
+                  <input type="range" min={15} max={100} step={1} value={w}
+                    onChange={(e) => setW(i, parseInt(e.target.value, 10))}
+                    style={{ flex: 1, accentColor: 'var(--accent)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--dim)', width: 34, textAlign: 'right' }}>{w}%</span>
+                  {n && <span style={{ fontSize: 10, color: 'var(--dim2)', width: 62 }}>{n.w}×{n.h}</span>}
+                  {low &&
+                    <span title={'Source is ' + n.w + 'px wide but displays at ~' + realPx + 'px on the site — it will look soft/pixelated. Reduce the width.'}
+                      style={{ fontSize: 10, color: '#ffcf5c', whiteSpace: 'nowrap' }}>⚠ upscaled</span>}
+                  <button onClick={() => remove(i)} title="Remove" style={{ ...miniBtn, background: 'transparent', color: 'var(--danger)', width: 20 }}>✕</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>}
+
       <ImageDrop onFiles={onAddImages} label="+ Add images or videos to this project" />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <input className="ad-input" placeholder="Paste a YouTube or Vimeo URL to embed" value={embedUrl}
           onChange={(e) => setEmbedUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addEmbed()} />
         <button className="ad-btn ghost" onClick={addEmbed}>Add embed</button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--dim2)', marginTop: 8 }}>
+        Page preview shows each item at the width it appears on the site. Drag a slider to resize; ⚠ upscaled means the file's resolution is lower than its display size and will look pixelated.
       </div>
     </div>
   );

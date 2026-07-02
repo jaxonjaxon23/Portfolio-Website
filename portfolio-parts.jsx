@@ -23,7 +23,10 @@ function GalleryItem({ item, rounded }) {
   const radius = rounded ? 4 : 0;
   if (item.type === 'video') {
     return (
-      <video src={item.src} autoPlay loop muted playsInline controls
+      <video src={item.src} autoPlay loop muted playsInline
+      ref={(el) => { if (el) { el.defaultMuted = true; el.muted = true; el.volume = 0; } }}
+      onVolumeChange={(e) => { const el = e.currentTarget; if (!el.muted || el.volume !== 0) { el.muted = true; el.volume = 0; } }}
+      onLoadedMetadata={(e) => { e.currentTarget.muted = true; e.currentTarget.volume = 0; }}
       style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }}></video>);
 
   }
