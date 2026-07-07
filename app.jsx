@@ -203,6 +203,7 @@ function App() {
       <DepthCloud />
       <AnimatedEntity />
       <CustomCursor />
+      <VercelAnalytics />
 
       {isAbout && !isMobile &&
       <React.Fragment>
