@@ -182,7 +182,9 @@ function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header tab={tab} setTab={setTab} tabs={TABS} onLogout={async () => { if (SB) { try { await SB.auth.signOut(); } catch (_) {} } setAuthed(false); }} />
+      <Header tab={tab} setTab={setTab} tabs={TABS} busy={busy}
+        onSave={publish}
+        onLogout={async () => { if (SB) { try { await SB.auth.signOut(); } catch (_) {} } setAuthed(false); }} />
       <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 80px' }}>
 
         {tab === 'site' &&
@@ -254,7 +256,7 @@ function App() {
   );
 }
 
-function Header({ tab, setTab, tabs, onLogout }) {
+function Header({ tab, setTab, tabs, onLogout, onSave, busy }) {
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(11,12,13,0.92)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--line2)' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 28px', display: 'flex', alignItems: 'center', gap: 22, height: 56 }}>
@@ -265,6 +267,7 @@ function Header({ tab, setTab, tabs, onLogout }) {
               style={{ background: tab === id ? 'var(--panel2)' : 'transparent', border: 'none', borderRadius: 8, padding: '7px 13px', cursor: 'pointer', color: tab === id ? '#fff' : 'var(--dim)', fontWeight: tab === id ? 600 : 400 }}>{label}</button>
           ))}
         </div>
+        <button className="ad-btn" disabled={busy} onClick={onSave} style={{ padding: '7px 16px' }}>{busy ? 'Saving…' : 'Save'}</button>
         <a href="index.html" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none' }}>View site ↗</a>
         <button onClick={onLogout} style={{ background: 'none', border: 'none', color: 'var(--dim)', fontSize: 12, cursor: 'pointer' }}>Log out</button>
       </div>

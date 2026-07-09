@@ -254,7 +254,11 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
   if (mobile) {
     return (
       <div style={{ paddingBottom: 100 }}>
-        <BioShort locationStyle={locationStyle} mobile contact={false} />
+        <div style={{ position: 'relative', overflow: 'visible' }}>
+          <BioShort locationStyle={locationStyle} mobile contact={false} />
+          <window.MobileEntityAnchor which="small" />
+          <window.MobileEntityAnchor which="large" />
+        </div>
         <ProjectInfo
           p={p} top={0} locked={locked} mobile
           order={order} onReorder={handleReorder}

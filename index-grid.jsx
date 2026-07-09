@@ -300,8 +300,10 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
         minHeight: '100%', width: 'max-content',
       }}>
         {isMobile && (
-          <div style={{ width: 300, flexShrink: 0 }}>
+          <div style={{ width: 300, flexShrink: 0, position: 'relative', overflow: 'visible' }}>
             <BioAbout locationStyle={locationStyle} mobile />
+            <window.MobileEntityAnchor which="small" />
+            <window.MobileEntityAnchor which="large" />
           </div>
         )}
         {projects.map((p, colIdx) => (

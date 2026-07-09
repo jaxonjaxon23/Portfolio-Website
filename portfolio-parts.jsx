@@ -412,6 +412,19 @@ function LargeEntity({ locked = true }) {
     dragRef.current = { offX: e.clientX - r.left, offY: e.clientY - r.top };
   };
 
+  const nudge = (dx, dy) => {
+    setPos((p) => {
+      const base = p || { left: LARGE_ENTITY_DEFAULT.left, top: window.innerHeight - LARGE_ENTITY_DEFAULT.bottom - 792 };
+      const next = { left: base.left + dx, top: base.top + dy };
+      try { localStorage.setItem(LARGE_ENTITY_KEY, JSON.stringify(next)); } catch (_) {}
+      return next;
+    });
+  };
+  const resetPos = () => {
+    setPos(null);
+    try { localStorage.removeItem(LARGE_ENTITY_KEY); } catch (_) {}
+  };
+
   if (isMob) return null;
   return (
     <div ref={elRef} onMouseDown={onDown}
@@ -431,9 +444,29 @@ function LargeEntity({ locked = true }) {
     }}>
       <iframe src="entities/vector-entity-2.html" title="" scrolling="no"
       style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', display: 'block', pointerEvents: 'none' }} />
+      {!locked &&
+      <div onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%) rotate(180deg)',
+          display: 'grid', gridTemplateColumns: 'repeat(3, 30px)', gap: 3, pointerEvents: 'auto',
+        }}>
+          <span />
+          <button onClick={() => nudge(0, -8)} style={nudgeBtnStyle}>▲</button>
+          <span />
+          <button onClick={() => nudge(-8, 0)} style={nudgeBtnStyle}>◀</button>
+          <button onClick={resetPos} title="Reset position" style={{ ...nudgeBtnStyle, fontSize: 10 }}>↺</button>
+          <button onClick={() => nudge(8, 0)} style={nudgeBtnStyle}>▶</button>
+          <span />
+          <button onClick={() => nudge(0, 8)} style={nudgeBtnStyle}>▼</button>
+          <span />
+        </div>}
     </div>);
 
 }
+const nudgeBtnStyle = {
+  width: 30, height: 30, borderRadius: 6, border: '1px solid rgba(255,255,255,0.35)',
+  background: 'rgba(0,0,0,0.75)', color: '#fff', cursor: 'pointer', fontSize: 12, lineHeight: 1,
+};
 
 LargeEntity.reset = function () {try {localStorage.removeItem(LARGE_ENTITY_KEY);} catch (_) {}};
 
@@ -446,8 +479,30 @@ const LargeEntityMemo = React.memo(LargeEntity);
 LargeEntityMemo.reset = LargeEntity.reset;
 const BioAboutMemo = React.memo(BioAbout);
 
+// Mobile-only entity anchors: small badges pinned to a bubble's corner,
+// non-interactive, so the vector entities show up on phones without needing
+// the desktop drag/viewport-fixed positioning.
+function MobileEntityAnchor({ which }) {
+  if (which === 'small') {
+    return (
+      <iframe src="entities/vector-entity-1.html" title="" scrolling="no" aria-hidden="true"
+      style={{
+        position: 'absolute', top: 4, right: -46, width: 118, height: 167,
+        border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 2,
+      }} />);
+  }
+  return (
+    <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
+    style={{
+      position: 'absolute', bottom: 0, right: -60, width: 168, height: 238,
+      transform: 'rotate(180deg)', transformOrigin: 'center',
+      border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 2,
+    }} />);
+
+}
+
 Object.assign(window, {
-  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer,
+  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer, MobileEntityAnchor,
   DepthCloud: DepthCloudMemo,
   AnimatedEntity: AnimatedEntityMemo,
   LargeEntity: LargeEntityMemo,
