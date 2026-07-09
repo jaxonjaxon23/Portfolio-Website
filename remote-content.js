@@ -15,10 +15,18 @@
       };
       window.PROJECTS = window.SITE_CONTENT.projects;
     }
-    // diagram node positions live in the layout system
+    // diagram node positions + entity position live in the layout system.
+    // Supabase is the source of truth: clear any stale LOCAL override so a
+    // browser that previously nudged something by hand doesn't shadow what
+    // was saved from the CMS (this is what makes edits global, not per-device).
+    window.BAKED_LAYOUT = window.BAKED_LAYOUT || {};
     if (data.positions && typeof data.positions === 'object') {
-      window.BAKED_LAYOUT = window.BAKED_LAYOUT || {};
       window.BAKED_LAYOUT['diagram-node-pos-v1'] = JSON.stringify(data.positions);
+      try { localStorage.removeItem('diagram-node-pos-v1'); } catch (_) {}
+    }
+    if (data.entityPos && typeof data.entityPos === 'object') {
+      window.BAKED_LAYOUT['large-entity-pos-v1'] = JSON.stringify(data.entityPos);
+      try { localStorage.removeItem('large-entity-pos-v1'); } catch (_) {}
     }
   }
 

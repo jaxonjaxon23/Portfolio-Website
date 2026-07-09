@@ -184,7 +184,40 @@ function IndexOrderEditor({ projects, imgMap, onReorder }) {
   );
 }
 
+// ---- Entity position (global; the large About-page vector entity) ----
+const ENTITY_DEFAULT = { left: -40, top: -712 }; // matches LARGE_ENTITY_DEFAULT bottom-anchor roughly
+function EntityPositionEditor({ pos, onChange }) {
+  const p = pos || ENTITY_DEFAULT;
+  const nudge = (dx, dy) => onChange({ left: p.left + dx, top: p.top + dy });
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 34px)', gap: 4 }}>
+          <span />
+          <button onClick={() => nudge(0, -10)} style={entBtnStyle}>▲</button>
+          <span />
+          <button onClick={() => nudge(-10, 0)} style={entBtnStyle}>◀</button>
+          <button onClick={() => onChange(null)} title="Reset to default" style={{ ...entBtnStyle, fontSize: 11 }}>↺</button>
+          <button onClick={() => nudge(10, 0)} style={entBtnStyle}>▶</button>
+          <span />
+          <button onClick={() => nudge(0, 10)} style={entBtnStyle}>▼</button>
+          <span />
+        </div>
+        <div style={{ color: 'var(--dim)', fontSize: 12, lineHeight: 1.7 }}>
+          Nudges the large vector entity on the About page.<br />
+          Current offset: left {Math.round(p.left)}px, top {Math.round(p.top)}px.<br />
+          Saved to Supabase with the rest of your changes — click <b>Save</b> above.
+        </div>
+      </div>
+    </Card>
+  );
+}
+const entBtnStyle = {
+  width: 34, height: 34, borderRadius: 7, border: '1px solid var(--line)', background: 'var(--panel2)',
+  color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+};
+
 Object.assign(window, {
-  A_DEFAULT_NODES, defaultPosFor,
-  LocationEditor, BioEditor, DiagramPicker, IndexOrderEditor,
+  A_DEFAULT_NODES, defaultPosFor, ENTITY_DEFAULT,
+  LocationEditor, BioEditor, DiagramPicker, IndexOrderEditor, EntityPositionEditor,
 });

@@ -62,6 +62,9 @@ function App() {
     return map;
   });
   const imgMapRef = useMRef({}); // path -> { url, file, isVideo }
+  const [entityPos, setEntityPos] = useMState(() => {
+    try { return JSON.parse((window.BAKED_LAYOUT && window.BAKED_LAYOUT['large-entity-pos-v1']) || 'null'); } catch (_) { return null; }
+  });
   const [, force] = useMState(0);
   const rerender = () => force((n) => n + 1);
   const [tab, setTab] = useMState('site');
@@ -87,6 +90,7 @@ function App() {
         });
       }
       if (d.positions) setPositions((m) => ({ ...m, ...d.positions }));
+      if ('entityPos' in d) setEntityPos(d.entityPos);
     });
     return () => { try { sub.subscription.unsubscribe(); } catch (_) {} };
   }, []);
@@ -158,7 +162,7 @@ function App() {
       const posObj = {};
       projects.forEach((p, i) => { posObj[p.id] = positions[p.id] || window.defaultPosFor(i); });
 
-      const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj };
+      const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj, entityPos: entityPos };
       const { error } = await SB.from('content').upsert({ id: 1, data: doc, updated_at: new Date().toISOString() });
       if (error) throw new Error(error.message);
 
@@ -225,6 +229,9 @@ function App() {
             <SectionTitle sub="Drag any node to set where that project sits on the About-page constellation. Hover a node to see its name.">Diagram positions</SectionTitle>
             <window.DiagramPicker projects={projects} positions={positions}
               onMove={(id, x, y) => setPositions((m) => ({ ...m, [id]: { x, y } }))} />
+            <div style={{ height: 20 }} />
+            <SectionTitle sub="This is the large animated entity that overlays the About page.">Entity position</SectionTitle>
+            <window.EntityPositionEditor pos={entityPos} onChange={setEntityPos} />
           </div>}
 
         {tab === 'index' &&
