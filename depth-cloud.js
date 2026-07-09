@@ -192,6 +192,7 @@ void main() {
     const onTouch = (e) => { if (e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('touchmove', onTouch, { passive: true });
+    window.addEventListener('touchstart', onTouch, { passive: true });
 
     let raf = 0, count = 0, alive = true;
 
@@ -256,6 +257,7 @@ void main() {
       cancelAnimationFrame(raf);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('touchmove', onTouch);
+      window.removeEventListener('touchstart', onTouch);
       window.removeEventListener('resize', resize);
     };
   };

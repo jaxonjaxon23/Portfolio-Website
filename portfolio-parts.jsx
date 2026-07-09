@@ -78,9 +78,33 @@ function CustomCursor({ enabled = true }) {
   const ref = usePRef(null);
   usePEffect(() => {
     if (!enabled) return;
-    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return;
     const el = ref.current;
     if (!el) return;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+    if (coarse) {
+      // Touch devices: the crosshair only appears while a finger is down,
+      // right at the touch point — no OS-cursor swap needed.
+      el.style.opacity = '0';
+      const onTouchMove = (e) => {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        el.style.transform = `translate(${t.clientX}px, ${t.clientY}px) translate(-50%, -50%)`;
+        el.style.opacity = '0.65';
+      };
+      const onTouchEnd = () => { el.style.opacity = '0'; };
+      window.addEventListener('touchstart', onTouchMove, { passive: true });
+      window.addEventListener('touchmove', onTouchMove, { passive: true });
+      window.addEventListener('touchend', onTouchEnd, { passive: true });
+      window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+      return () => {
+        window.removeEventListener('touchstart', onTouchMove);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', onTouchEnd);
+        window.removeEventListener('touchcancel', onTouchEnd);
+      };
+    }
+
     const styleEl = document.createElement('style');
     styleEl.textContent = '* { cursor: none !important; }';
     document.head.appendChild(styleEl);
@@ -488,14 +512,14 @@ function MobileEntityAnchor({ which }) {
     return (
       <iframe src="entities/vector-entity-1.html" title="" scrolling="no" aria-hidden="true"
       style={{
-        position: 'absolute', top: 4, right: -46, width: 118, height: 167,
+        position: 'absolute', top: -60, right: -160, width: 331, height: 468,
         border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 2,
       }} />);
   }
   return (
     <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
     style={{
-      position: 'absolute', bottom: 0, right: -60, width: 168, height: 238,
+      position: 'absolute', bottom: -100, right: -220, width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
       border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 2,
     }} />);
