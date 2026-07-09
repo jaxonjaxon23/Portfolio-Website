@@ -524,15 +524,14 @@ function MobileEntityAnchor({ which }) {
         border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 6,
       }} />);
   }
-  // desktop: entity left -40, bottom 40 vs bubble left 24 (viewport has lots of
-  // room below the bubble there). Mobile's bubble fills nearly the whole
-  // wrapper, so anchor from the TOP instead: start just above the bubble's
-  // bottom edge and let most of the entity's height hang down past it,
-  // clipping off the bottom of the screen — only a sliver overlaps the bubble.
+  // Mobile phone viewports are often barely taller than the bubble itself, so
+  // there's little/no guaranteed empty space below it to hang the entity into
+  // (unlike desktop's tall viewport). Overlap the bubble's own lower portion
+  // instead, so it's reliably visible, while still extending past the bottom.
   return (
     <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
     style={{
-      position: 'absolute', left: -56, top: 'calc(100% - 130px)', width: 560, height: 792,
+      position: 'absolute', left: -56, top: 'calc(100% - 420px)', width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
       border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 6,
     }} />);
