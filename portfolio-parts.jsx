@@ -507,21 +507,25 @@ const BioAboutMemo = React.memo(BioAbout);
 // Mobile-only entity anchors: small badges pinned to a bubble's corner,
 // non-interactive, so the vector entities show up on phones without needing
 // the desktop drag/viewport-fixed positioning.
+// Mobile-only entity anchors: absolutely positioned inside the bubble's own
+// wrapper so they scroll away together with it (not fixed to the viewport).
+// Anchored near the bubble's corner at full/near-desktop size — they may clip
+// at the screen edge, which is expected.
 function MobileEntityAnchor({ which }) {
   if (which === 'small') {
     return (
       <iframe src="entities/vector-entity-1.html" title="" scrolling="no" aria-hidden="true"
       style={{
-        position: 'absolute', top: -60, right: -160, width: 331, height: 468,
-        border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 2,
+        position: 'absolute', top: -60, left: 190, width: 331, height: 468,
+        border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 6,
       }} />);
   }
   return (
     <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
     style={{
-      position: 'absolute', bottom: -100, right: -220, width: 560, height: 792,
+      position: 'absolute', bottom: -100, left: 60, width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
-      border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 2,
+      border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 6,
     }} />);
 
 }
