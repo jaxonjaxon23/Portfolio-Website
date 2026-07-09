@@ -49,7 +49,8 @@
     var TENDRIL_SELECTOR = ".tendril";
 
     // --- Gentle sway on each tendril's free tip -------------------------
-    var AMP_MIN = 6.75, AMP_MAX = 15.75;            // sway amplitude (px) at the tip — 3x ambient movement
+    var AMP_MIN = 13, AMP_MAX = 30;                 // sway amplitude (px) at the tip — big ambient movement
+    var SWAY_FALLOFF_POW = 1.35;                    // <1 = more of the branch visibly bends, not just the tip
     var SWAY_MIN_S   = 6.0,  SWAY_MAX_S   = 13.0;
     var SECOND_MIN_S = 2.6,  SECOND_MAX_S = 4.6;
     var TWITCH_MIN_S = 0.7,  TWITCH_MAX_S = 1.5;
@@ -137,12 +138,31 @@
         if (!node) { node = { x: entry.ox, y: entry.oy, members: [], dist: 0 }; nodeMap[key] = node; }
         node.members.push({ entry: entry, pathObj: pathObj });
       }
+      // per-path arc-length falloff weight (0 at the anchored base, 1 at the
+      // free tip) so ambient sway bends the WHOLE branch, not just its tip vertex.
+      function computeSwayFalloff(pathObj) {
+        var v = pathObj.verts, nn = v.length;
+        if (nn < 2) { pathObj.sw = [1]; return; }
+        var cum = new Array(nn); cum[0] = 0;
+        for (var i = 1; i < nn; i++) cum[i] = cum[i - 1] + Math.hypot(v[i].ox - v[i - 1].ox, v[i].oy - v[i - 1].oy);
+        var total = cum[nn - 1] || 1;
+        var dF = Math.hypot(v[0].ox - cx, v[0].oy - cy);
+        var dL = Math.hypot(v[nn - 1].ox - cx, v[nn - 1].oy - cy);
+        var tipAtEnd = dL >= dF;
+        pathObj.sw = new Array(nn);
+        for (var i2 = 0; i2 < nn; i2++) {
+          var f = cum[i2] / total;
+          var frac = tipAtEnd ? f : (1 - f);
+          pathObj.sw[i2] = Math.pow(frac, SWAY_FALLOFF_POW);
+        }
+      }
       for (var p = 0; p < paths.length; p++) {
         var v = paths[p].verts;
         if (v.length === 1) { addEndpoint(paths[p], v[0]); continue; }
         var f = v[0], l = v[v.length - 1];
         var df = Math.hypot(f.ox - cx, f.oy - cy), dl = Math.hypot(l.ox - cx, l.oy - cy);
         addEndpoint(paths[p], dl >= df ? l : f);   // animate only the far (free) tip
+        computeSwayFalloff(paths[p]);
       }
       var nodes = [];
       for (var k in nodeMap) { var n = nodeMap[k]; n.dist = Math.hypot(n.x - cx, n.y - cy); nodes.push(n); }
@@ -305,8 +325,16 @@
           var dx = evalOsc(nd.ax, t), dy = evalOsc(nd.ay, t);
           var mem = nd.members;
           for (var j = 0; j < mem.length; j++) {
-            mem[j].entry.x = mem[j].entry.ox + dx;
-            mem[j].entry.y = mem[j].entry.oy + dy;
+            var po = mem[j].pathObj, sw = po.sw, vv = po.verts;
+            if (sw && vv.length > 1) {
+              for (var kx = 0; kx < vv.length; kx++) {
+                vv[kx].x = vv[kx].ox + dx * sw[kx];
+                vv[kx].y = vv[kx].oy + dy * sw[kx];
+              }
+            } else {
+              mem[j].entry.x = mem[j].entry.ox + dx;
+              mem[j].entry.y = mem[j].entry.oy + dy;
+            }
           }
         }
 

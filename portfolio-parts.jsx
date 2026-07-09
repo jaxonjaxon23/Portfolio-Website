@@ -298,6 +298,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
 });
 
 function BioShort({ locationStyle, top = 19, mobile = false, contact = true }) {
+  const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
   return (
     <div style={mobile ? {
       ...BUBBLE, position: 'relative', width: '100%', boxSizing: 'border-box',
@@ -307,15 +308,15 @@ function BioShort({ locationStyle, top = 19, mobile = false, contact = true }) {
       padding: '22px 24px', zIndex: 25,
     }}>
       <BubbleNav />
-      <div style={{ fontWeight: 700 }}>Jaxon Stickler</div>
-      <div>Artist/Designer</div>
+      <div style={{ fontWeight: 700 }}>{bio.name || 'Jaxon Stickler'}</div>
+      <div>{bio.role || 'Designer/Artist'}</div>
       <div style={{ height: 16 }} />
       <div><LocationSignifier style={locationStyle} /></div>
       {contact && <React.Fragment>
         <div style={{ height: 16 }} />
         <div>Contact:</div>
-        <div>Email: <a href="mailto:jaxonstickler@gmail.com" data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>jaxonstickler@gmail.com</a></div>
-        <div>Instagram: <a href="https://instagram.com/jaxonstickler" target="_blank" rel="noopener" data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>@jaxonstickler</a></div>
+        <div>Email: <a href={'mailto:' + (bio.email || 'jaxonstickler@gmail.com')} data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{bio.email || 'jaxonstickler@gmail.com'}</a></div>
+        <div>Instagram: <a href={bio.instagramUrl || 'https://instagram.com/jaxonstickler'} target="_blank" rel="noopener" data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{bio.instagram || '@jaxonstickler'}</a></div>
       </React.Fragment>}
     </div>);
 
