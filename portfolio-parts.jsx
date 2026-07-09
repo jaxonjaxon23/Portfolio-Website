@@ -531,7 +531,7 @@ function MobileEntityAnchor({ which }) {
   return (
     <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
     style={{
-      position: 'absolute', left: -56, top: 'calc(100% - 600px)', width: 560, height: 792,
+      position: 'absolute', left: -80, top: 'calc(100% - 510px)', width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
       border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 6,
     }} />);
