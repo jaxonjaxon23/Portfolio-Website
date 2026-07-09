@@ -508,22 +508,28 @@ const BioAboutMemo = React.memo(BioAbout);
 // non-interactive, so the vector entities show up on phones without needing
 // the desktop drag/viewport-fixed positioning.
 // Mobile-only entity anchors: absolutely positioned inside the bubble's own
-// wrapper so they scroll away together with it (not fixed to the viewport).
-// Anchored near the bubble's corner at full/near-desktop size — they may clip
-// at the screen edge, which is expected.
+// wrapper (so they scroll away together with it), using the SAME relative
+// offset from the bubble's corner that the desktop version uses relative to
+// its fixed bubble (left:24 top:19 width:345 desktop bubble) \u2014 scaled to the
+// narrower 300px mobile bubble. Full/near-desktop entity size; they clip at
+// the screen edge, which is expected.
 function MobileEntityAnchor({ which }) {
   if (which === 'small') {
+    // desktop: entity left 197,top -133 vs bubble left24,top19,w345
+    //   => dx=+173 (~50% of bubble width), dy=-152 (above bubble top)
     return (
       <iframe src="entities/vector-entity-1.html" title="" scrolling="no" aria-hidden="true"
       style={{
-        position: 'absolute', top: -60, left: 190, width: 331, height: 468,
+        position: 'absolute', left: 150, top: -152, width: 331, height: 468,
         border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 6,
       }} />);
   }
+  // desktop: entity left -40, bottom 40 vs bubble left 24
+  //   => dx=-64 (~64px left of bubble's left edge), bottom 40 (near bubble's own bottom)
   return (
     <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
     style={{
-      position: 'absolute', bottom: -100, left: 60, width: 560, height: 792,
+      position: 'absolute', left: -56, bottom: 40, width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
       border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 6,
     }} />);
