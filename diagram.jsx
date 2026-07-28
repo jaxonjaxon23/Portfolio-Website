@@ -185,6 +185,79 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
   const dragId = useDRef(null);
   const layerRef = useDRef(null);
   const movedRef = useDRef(false);
+  const nodeRefs = useDRef({});
+  const labelRef = useDRef(null);
+  const posRef = useDRef(pos);
+  posRef.current = pos;
+  const hoveredRef = useDRef(hoveredId);
+  hoveredRef.current = hoveredId;
+
+  // Proximity glow: nodes brighten as the cursor nears them, hinting the whole
+  // field is reactive/clickable. Written directly to node styles inside a single
+  // rAF (one getBoundingClientRect per frame, zero React re-renders per move) so
+  // it stays smooth on low-end machines even with the WebGL backdrop running.
+  React.useEffect(() => {
+    if (!locked || mobile) return;
+    const PROX = 190, LABEL_R = 110;
+    let raf = null, active = false;
+    const cursor = { x: 0, y: 0 };
+    let rectCache = null;
+    const readRect = () => { const l = layerRef.current; rectCache = l ? l.getBoundingClientRect() : null; };
+    const paint = () => {
+      raf = null;
+      if (!rectCache) readRect();
+      const r = rectCache;
+      if (!r) return;
+      let nId = null, nDist = Infinity;
+      for (let i = 0; i < projects.length; i++) {
+        const p = projects[i];
+        const el = nodeRefs.current[p.id];
+        if (!el) continue;
+        const pt = posRef.current[p.id] || { x: 50, y: 50 };
+        const px = r.left + (pt.x / 100) * r.width;
+        const py = r.top + (pt.y / 100) * r.height;
+        const dist = Math.hypot(cursor.x - px, cursor.y - py);
+        if (dist < nDist) { nDist = dist; nId = p.id; }
+        const prox = active ? Math.max(0, 1 - dist / PROX) : 0;
+        const hot = hoveredRef.current === p.id;
+        const intensity = hot ? 1 : prox * 0.65;
+        const shade = Math.round(217 + 38 * intensity);
+        el.style.background = 'rgb(' + shade + ',' + shade + ',' + shade + ')';
+        el.style.transform = 'scale(' + (1 + intensity * 0.5).toFixed(3) + ')';
+        el.style.boxShadow = intensity > 0.02
+          ? '0 0 ' + (14 * intensity).toFixed(1) + 'px ' + (3 * intensity).toFixed(1) + 'px rgba(255,255,255,' + (0.9 * intensity).toFixed(2) + '), 0 0 ' + (26 * intensity).toFixed(1) + 'px ' + (8 * intensity).toFixed(1) + 'px rgba(255,255,255,' + (0.4 * intensity).toFixed(2) + ')'
+          : 'none';
+      }
+      const lab = labelRef.current;
+      if (lab) {
+        if (active && nId && nDist < LABEL_R) {
+          const p = projects.find((x) => x.id === nId);
+          const pt = posRef.current[nId] || { x: 50, y: 50 };
+          lab.textContent = p ? p.title : '';
+          lab.style.left = pt.x + '%';
+          lab.style.top = pt.y + '%';
+          lab.style.opacity = Math.max(0, 1 - nDist / LABEL_R).toFixed(2);
+        } else {
+          lab.style.opacity = '0';
+        }
+      }
+    };
+    const schedule = () => { if (raf == null) raf = requestAnimationFrame(paint); };
+    const onMove = (e) => { active = true; cursor.x = e.clientX; cursor.y = e.clientY; schedule(); };
+    const onLeave = () => { active = false; schedule(); };
+    const invalidate = () => { rectCache = null; schedule(); };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    window.addEventListener('mouseleave', onLeave);
+    window.addEventListener('resize', invalidate);
+    window.addEventListener('scroll', invalidate, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseleave', onLeave);
+      window.removeEventListener('resize', invalidate);
+      window.removeEventListener('scroll', invalidate);
+      if (raf != null) cancelAnimationFrame(raf);
+    };
+  }, [locked, mobile, projects]);
 
   const persist = (next) => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (_) {}
@@ -257,10 +330,10 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
       {/* ---- nodes ---- */}
       {projects.map((p) => {
         const pt = pos[p.id] || { x: 50, y: 50 };
-        const hot = hoveredId === p.id;
         return (
           <div
             key={p.id}
+            ref={(el) => { nodeRefs.current[p.id] = el; }}
             data-clickable={locked ? '' : undefined}
             onMouseEnter={() => locked && onHover(p)}
             onMouseLeave={() => locked && onHover(null)}
@@ -270,18 +343,25 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
               position: 'absolute', left: pt.x + '%', top: pt.y + '%',
               width: 13, height: 13, marginLeft: -6.5, marginTop: -6.5,
               borderRadius: '50%',
-              background: hot ? '#fff' : 'rgb(217,217,217)',
+              background: 'rgb(217,217,217)',
               cursor: locked ? 'pointer' : 'grab',
               pointerEvents: 'auto',
-              transform: hot ? 'scale(1.5)' : 'scale(1)',
-              boxShadow: hot
-                ? '0 0 14px 3px rgba(255,255,255,0.9), 0 0 26px 8px rgba(255,255,255,0.4)'
-                : '0 0 0 0 rgba(255,255,255,0)',
-              transition: dragId.current === p.id ? 'none' : 'transform .2s ease, box-shadow .2s ease, background .2s ease',
+              willChange: 'transform',
+              transition: dragId.current === p.id ? 'none' : 'transform .12s ease-out, box-shadow .12s ease-out, background .12s ease-out',
             }}
           />
         );
       })}
+
+      {/* ---- proximity label: nearest node's name, ref-driven (no re-render) ---- */}
+      <div ref={labelRef} style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%, -100%) translateY(-15px)',
+        fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: '#fff',
+        textShadow: '0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)',
+        textTransform: 'uppercase', whiteSpace: 'nowrap', pointerEvents: 'none',
+        opacity: 0, transition: 'opacity .15s ease-out',
+      }} />
 
       {/* ---- hover image: first project image, offset near the node, clamped on-screen ---- */}
       {(() => {

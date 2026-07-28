@@ -181,12 +181,15 @@ void main() {
     }
 
     const target = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
-    let interacting = false;
+    let interacting = false, idleTimer = 0;
     function setTarget(cx, cy) {
       const rect = canvas.getBoundingClientRect();
       target.x = ((cx - rect.left) / rect.width) * 2 - 1;
       target.y = -(((cy - rect.top) / rect.height) * 2 - 1);
       interacting = true;
+      clearTimeout(idleTimer);
+      // resume the idle drift a beat after the pointer goes quiet
+      idleTimer = setTimeout(() => { interacting = false; }, 2500);
     }
     const onMove = (e) => setTarget(e.clientX, e.clientY);
     const onTouch = (e) => { if (e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); };
@@ -231,23 +234,34 @@ void main() {
     // frame-rate-independent ease so the cursor follow feels the same at any fps cap
     const ease = 1 - Math.pow(1 - CONFIG.ease, 60 / QUALITY.fps);
     const minDelta = 1000 / QUALITY.fps - 0.5;
-    let lastDraw = -Infinity;
+    let lastDraw = -Infinity, lastBg = -1;
 
     function frame(t) {
       if (!alive) return;
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;          // pause GPU work when tab/page not visible
       if (t - lastDraw < minDelta) return;  // cap frame rate for low-end smoothness
-      lastDraw = t;
-      if (!interacting) {
+
+      const drifting = !interacting && QUALITY.drift > 0;
+      if (drifting) {
         const s = t * 0.00025;
         target.x = Math.cos(s * 0.85) * QUALITY.drift;
         target.y = Math.sin(s * 1.25) * QUALITY.drift * 0.65;
       }
-      mouse.x += (target.x - mouse.x) * ease;
-      mouse.y += (target.y - mouse.y) * ease;
+      const dx = target.x - mouse.x, dy = target.y - mouse.y;
+      var bg = window.__bgRGB || [0, 0, 0];
+      const bgChanged = bg[0] !== lastBg;
+      // Nothing moving, image converged, and bg unchanged → skip the draw entirely.
+      // This is the big win: a static pointer no longer burns a full-res GPU
+      // redraw every frame (previously it did, forever, once you moved once).
+      if (!drifting && !bgChanged && (dx * dx + dy * dy) < 1e-7 && lastDraw > -Infinity) return;
+
+      lastDraw = t;
+      lastBg = bg[0];
+      mouse.x += dx * ease;
+      mouse.y += dy * ease;
       gl.uniform2f(loc.uMouse, mouse.x, mouse.y);
-      gl.clearColor(0, 0, 0, 1);
+      gl.clearColor(bg[0], bg[1], bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       if (count) gl.drawArrays(gl.POINTS, 0, count);
     }
@@ -255,6 +269,7 @@ void main() {
     return function cleanup() {
       alive = false;
       cancelAnimationFrame(raf);
+      clearTimeout(idleTimer);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('touchmove', onTouch);
       window.removeEventListener('touchstart', onTouch);

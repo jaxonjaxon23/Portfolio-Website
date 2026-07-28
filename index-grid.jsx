@@ -17,7 +17,7 @@ function TitleCard({ p }) {
         <div style={{ opacity: 0.55, marginTop: 3, fontSize: 11 }}>{p.collab}</div>
       )}
       {isSuperflux && (
-        <div style={{ opacity: 0.55, marginTop: 5, fontSize: 11 }}>{p.client}</div>
+        <div style={{ opacity: 0.55, marginTop: 5, fontSize: 11 }}>{p.client.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')}</div>
       )}
     </div>
   );

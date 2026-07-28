@@ -10,7 +10,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "navPosition": "bottom-left",
   "bubbleOpacity": 1,
   "bubbleNavGraphic": false,
-  "nodesLocked": true
+  "nodesLocked": true,
+  "bgDarkness": 100
 } /*EDITMODE-END*/;
 
 // hover readout for the diagram — positioned dynamically below the bio panel
@@ -148,13 +149,29 @@ function LayoutExport() {
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const isMobile = useMobile();
-  const [view, setView] = useState(() => location.hash.slice(1) || (window.innerWidth < 768 ? 'index' : 'about'));
+  const [view, setView] = useState(() => location.hash.slice(1) || 'index');
   const [hovered, setHovered] = useState(null);
   const bioRef = useRef(null);
   const [readoutTop, setReadoutTop] = useState(500);
+  const [light, setLight] = useState(() => localStorage.getItem('theme') === 'light');
+
+  // Light mode: invert the whole page (CSS handles keeping media true-colour).
+  useEffect(() => {
+    document.documentElement.classList.toggle('light-mode', light);
+    localStorage.setItem('theme', light ? 'light' : 'dark');
+  }, [light]);
+
+  // Background darkness slider → CSS var (non-canvas areas) + WebGL clear color.
+  useEffect(() => {
+    const pct = Math.max(0, Math.min(100, Number.isFinite(t.bgDarkness) ? t.bgDarkness : 100));
+    const lightness = Math.round(3 + (100 - pct) * 0.35); // ~3% .. ~38%
+    document.documentElement.style.setProperty('--bg-color', `hsl(0, 0%, ${lightness}%)`);
+    const v = lightness / 100;
+    window.__bgRGB = [v, v, v];
+  }, [t.bgDarkness]);
 
   useEffect(() => {
-    const onHash = () => {setView(location.hash.slice(1) || 'about');setHovered(null);};
+    const onHash = () => {setView(location.hash.slice(1) || 'index');setHovered(null);};
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -181,7 +198,7 @@ function App() {
     return () => ro.disconnect();
   }, [view]);
 
-  const go = (v) => {location.hash = v === 'about' ? '' : v;};
+  const go = (v) => {location.hash = v === 'index' ? '' : v;};
   const openProject = (p) => {location.hash = p.id;};
 
   const project = view !== 'about' && view !== 'index' ?
@@ -262,6 +279,10 @@ function App() {
 
       <Footer left={footerLeft} navPosition={t.navPosition} />
 
+      <button id="theme-toggle" title="Toggle light / dark"
+      aria-label="Toggle light or dark mode"
+      onClick={() => setLight((v) => !v)}><span aria-hidden="true">{light ? '◐' : '◑'}</span>{light ? 'Light' : 'Dark'}</button>
+
       <TweaksPanel>
         <TweakSection label="Authoring" />
         <TweakToggle label="Lock all positions" value={t.nodesLocked}
@@ -294,6 +315,11 @@ function App() {
         <TweakSlider label="Default preview images"
         value={t.imageLimit} min={1} max={20} step={1}
         onChange={(v) => setTweak('imageLimit', v)} />
+
+        <TweakSection label="Background" />
+        <TweakSlider label="Darkness"
+        value={t.bgDarkness} min={0} max={100} step={1} unit="%"
+        onChange={(v) => setTweak('bgDarkness', v)} />
       </TweaksPanel>
     </div>);
 

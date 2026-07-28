@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { background: #0b0c0d; }
+  html { background: var(--bg-color, #0b0c0d); }
   body { background: transparent; color: #fff; -webkit-font-smoothing: antialiased; }
   body { min-height: 100vh; overflow-x: hidden; }
   ::selection { background: rgba(255,255,255,0.18); }
@@ -18,6 +18,22 @@
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   img { user-select: none; }
+  /* ---- light mode: invert the whole page, but keep real photo/video media true-colour ---- */
+  html.light-mode { filter: invert(1) hue-rotate(180deg); }
+  html.light-mode img,
+  html.light-mode video,
+  html.light-mode image-slot,
+  html.light-mode [data-keep-color] { filter: invert(1) hue-rotate(180deg); }
+  #theme-toggle {
+    position: fixed; right: 22px; bottom: 22px; left: auto; top: auto; z-index: 100001;
+    height: 32px; padding: 0 13px; border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.06);
+    color: #fff; cursor: pointer; display: flex; align-items: center; gap: 7px;
+    font-family: Inter, sans-serif; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; line-height: 1;
+    backdrop-filter: blur(6px);
+    transition: transform .25s ease, background .2s ease, border-color .2s ease;
+  }
+  #theme-toggle:hover { background: rgba(255,255,255,0.14); transform: scale(1.05); }
   @keyframes locPulseRing {
     0%   { transform: scale(1); opacity: 0.7; }
     70%  { transform: scale(3.4); opacity: 0; }
@@ -26,7 +42,7 @@
   /* ---- preloader ---- */
   #preloader {
     position: fixed; inset: 0; z-index: 100000;
-    background: #0b0c0d; display: flex; flex-direction: column;
+    background: var(--bg-color, #0b0c0d); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 18px;
     transition: opacity .6s ease; cursor: none;
   }
@@ -39,7 +55,11 @@
     width: 180px; height: 1px; background: rgba(255,255,255,0.16); overflow: hidden;
   }
   #preloader .pl-fill {
-    width: 0%; height: 100%; background: #fff; transition: width .25s ease;
+    width: 0%; height: 100%; background: #fff; transition: width .14s linear;
+  }
+  #preloader .pl-pct {
+    font-family: Inter, sans-serif; font-size: 11px; letter-spacing: 0.18em; font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.55); text-transform: uppercase;
   }
 </style>
 <link id="gfont-Inter" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap">
@@ -48,6 +68,7 @@
 <div id="root"></div>
 <div id="preloader">
   <div class="pl-track"><div class="pl-fill" id="pl-fill"></div></div>
+  <div class="pl-pct" id="pl-pct">0%</div>
 </div>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -71,16 +92,29 @@
 <script>
 (function () {
   var fill = document.getElementById('pl-fill');
+  var pct = document.getElementById('pl-pct');
   var pre = document.getElementById('preloader');
   if (!pre) return;
   var done = false;
+  var shownPct = 0, realPct = 0, pctRaf = 0;
+  // Perceived-progress easing: the readout chases the real load fraction but always
+  // creeps forward, so the number never stalls on a slow asset (labour-illusion).
+  function animatePct() {
+    var target = done ? 100 : Math.max(realPct, Math.min(shownPct + 0.4, 92));
+    shownPct += (target - shownPct) * 0.08;
+    var v = Math.round(shownPct);
+    if (fill) fill.style.width = shownPct.toFixed(1) + '%';
+    if (pct) pct.textContent = v + '%';
+    if (!done || v < 100) pctRaf = requestAnimationFrame(animatePct);
+    else { if (fill) fill.style.width = '100%'; if (pct) pct.textContent = '100%'; }
+  }
+  pctRaf = requestAnimationFrame(animatePct);
   function finish() {
     if (done) return; done = true;
-    if (fill) fill.style.width = '100%';
     setTimeout(function () {
       pre.classList.add('hidden');
       setTimeout(function () { if (pre.parentNode) pre.parentNode.removeChild(pre); }, 700);
-    }, 180);
+    }, 320);
   }
   function preload() {
     var urls = [];
@@ -107,7 +141,7 @@
     var cap = setTimeout(finish, 20000);
     function tick() {
       loaded++;
-      if (fill) fill.style.width = Math.round((loaded / total) * 100) + '%';
+      realPct = Math.round((loaded / total) * 100);
       if (loaded >= total) { clearTimeout(cap); finish(); }
     }
     urls.forEach(function (u) {

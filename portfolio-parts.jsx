@@ -68,7 +68,7 @@ function DepthCloud() {
   return (
     <canvas ref={ref} style={{
       position: 'fixed', inset: 0, width: '100%', height: '100%',
-      display: 'block', zIndex: -1, pointerEvents: 'none', background: '#000'
+      display: 'block', zIndex: -1, pointerEvents: 'none', background: 'var(--bg-color, #000)'
     }} />);
 
 }
@@ -187,11 +187,11 @@ const BUBBLE = {
 // normally and a "○" while a project is open. Self-contained — navigates via hash
 // so it can be dropped into any bubble without prop threading.
 function BubbleNav() {
-  const cur = (location.hash.slice(1) || (window.innerWidth < 768 ? 'index' : 'about'));
+  const cur = (location.hash.slice(1) || 'index');
   const isProject = cur && cur !== 'index' && cur !== 'about';
   const mobile = window.innerWidth < 768;
   const graphic = window.__navGraphic;
-  const go = (v) => { location.hash = (v === 'about' ? '' : v); };
+  const go = (v) => { location.hash = (v === 'index' ? '' : v); };
   const btn = (active) => ({
     fontFamily: FONT, color: '#fff', fontSize: 12, letterSpacing: '0.02em',
     background: 'none', border: 'none', padding: 0, cursor: 'pointer',
@@ -229,7 +229,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
   const working = Array.isArray(bio.working) ? bio.working : [];
   const [hovIdx, setHovIdx] = usePState(-1);
   return (
-    <div ref={ref} style={mobile ? {
+    <div ref={ref} id={mobile ? undefined : 'about-bubble'} style={mobile ? {
       ...BUBBLE, position: 'relative', width: '100%', boxSizing: 'border-box',
       padding: '22px 24px', zIndex: 1, borderRadius: 0,
     } : {
@@ -324,7 +324,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
 function BioShort({ locationStyle, top = 19, mobile = false, contact = true }) {
   const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
   return (
-    <div style={mobile ? {
+    <div id={mobile ? undefined : 'about-bubble'} style={mobile ? {
       ...BUBBLE, position: 'relative', width: '100%', boxSizing: 'border-box',
       padding: '22px 24px', zIndex: 1, borderRadius: 0,
     } : {

@@ -39,7 +39,7 @@ window.SITE_CONTENT = {
         "installation"
       ],
       "medium": "Wood, Motorcycle Crash Armour, Deadstock Puffer Jackets, Bitumen Membrane, Electric Motor, Wool Fabric, Kangaroo Spine, Mattress, Stone, Oyster Mushrooms, Fish Tank, Water, Potatoes, Dimensions Variable",
-      "client": "Radiant Pavilion, Closer Agencies Exhibition",
+      "client": "[Radiant Pavilion](https://www.radiantpavilion.com.au/), Closer Agencies Exhibition",
       "desc": "What does it truly feel like to invite other beings into our proximity? To let the sheer terror of ecological reality permeate our anesthetized spaces? Creating open networks, where contagion can flow between our technologies, bodies, and objects, may offer relief from the emerging modern issues of loneliness and alienation that characterize contemporary life. However, if we allow the complete integration of ecological entanglement into our intimate encounters and personal experiences, are we prepared for the depths of the uncanny that may unfold?",
       "cx": 62,
       "cy": 60,
@@ -378,7 +378,7 @@ window.SITE_CONTENT = {
         "design",
         "teamwork"
       ],
-      "client": "Superflux",
+      "client": "[Superflux](https://superflux.in/#)",
       "desc": "Speculative Design work for Superflux — 3 objects/entities with embedded electronic sensors for processing environmental signals.\n\nDesigned & constructed w/ @jonardern @anabjain @moncano @_ed_lewis\n\nExploring how artificial intelligence can help deepen our perception and understanding of the living world's intricate ecological intelligence.\n\nShown as part of the Design Museum exhibition 'More than Human: Making with the Living World' & Weltmuseum's 'The Craftocene'.",
       "cx": 56,
       "cy": 2060,
@@ -433,7 +433,7 @@ window.SITE_CONTENT = {
         "material experiment"
       ],
       "medium": "Washi Paper, Bleached Beeswax, Pigment",
-      "client": "Radiant Pavilion, Closer Agencies",
+      "client": "[Radiant Pavilion](https://www.radiantpavilion.com.au/), Closer Agencies",
       "desc": "A series of daggers, crafted from fine layers of washi and saturated with bleached beeswax, serving as an exploration of the affordances and potentialities embedded within the objects, tools, and artifacts we create.\n\nWeapons that are designed to be destroyed in their use, their inherent fragility introduces a built-in limitation that may guide the actions of those who interact with them.",
       "cx": 76,
       "cy": 2860,
@@ -645,7 +645,7 @@ window.SITE_CONTENT = {
         "collaboration"
       ],
       "medium": "Vehicle Debris, Salt, Electronics, Latex Sheeting, 360 Selfie Sticks, River Stones, 3D Printed PETG & TPU, Barnacles, Ring Lights, Cotton Rope, Motors, Rubber",
-      "client": "Soft Centre",
+      "client": "[Soft Centre](https://www.softcentre.com.au/)",
       "desc": "A collaboration with 2_Dual (+ soft robotic breathing system by John Hoang).\n\nThe festering body of the saviour heaves in the black forest. Circled by mimes, NPCs, and self-replicating false entities, it lurches across the desolate spiritual plane of a dead internet. CPU injury has led to disaster: an infinite morning doomscroll.\n\nWhat does ten billion years of gorging on slop do to a god?",
       "cx": 36,
       "cy": 4460,
@@ -713,7 +713,7 @@ window.SITE_CONTENT = {
         "event"
       ],
       "medium": "3D Printing, Upcycled Puffer Jackets, Merino, Spray Finishes",
-      "client": "MPavilion — collaboration with Amber McCartney\n",
+      "client": "[MPavilion](https://mpavilion.org/) — collaboration with Amber McCartney\n",
       "desc": "Field research along the Birrarung informs the process, mapping the human body through creaturely poses, which are then digitally reconstructed. Virtual sketches of 3D forms are overlaid onto the body, with soft extrusions realized through FDM 3D printing. Upcycled puffer jackets are draped to form hulking new limbs, while industrial techniques shape shoulder growths, systematically wrapped in mesh and coated with spray finishes.\n\nFrom the depths of the Birrarung's murk, a creature stirs — a strange, glistening entity, part tendons, part circuitry, a newly born hybrid being curious to inhabit the body of water that has surfaced at MPavilion.\n\nPhotography: Isabella Oliveria\n",
       "cx": 72,
       "cy": 4860,
@@ -840,8 +840,8 @@ window.SITE_CONTENT = {
         "material experiment"
       ],
       "medium": "Raspberry Pi, Electronic Sensors, Steamed Willow, Recycled Cotton Paper, Beeswax, Dyneema DCF, PETG, Mild Steel, Aluminium",
-      "client": "Superflux",
-      "desc": "A fourth speculative design entity for the NTMRD system. Dual box wings are mounted to an architectural core housing an array of particulate matter, anemometer and air sensors. Moving like a kite, the sensor picks up wind speeds and the textures of the air.\n\nAlongside three other entities, data is collected and streamed to the main processing unit. Environmental patterns are examined, and poetic prompts are generated to nudge human behaviour towards noticing and attuning to ecological rhythms.\n\nOn display at Weltmuseum Vienna as part of Superflux's first major solo exhibition, The Craftocene.\n\nImages by Matt Edgson\n",
+      "client": "[Superflux](https://superflux.in/#)",
+      "desc": "A fourth speculative design entity for the NTMRD system. Dual box wings are mounted to an architectural core housing an array of particulate matter, anemometer and air sensors. Moving like a kite, the sensor picks up wind speeds and the textures of the air.\n\nAlongside three other entities, data is collected and streamed to the main processing unit. Environmental patterns are examined, and poetic prompts are generated to nudge human behaviour towards noticing and attuning to ecological rhythms.\n\nOn display at [Weltmuseum](https://www.weltmuseumwien.at/en/programme/offers/wmw-contemporary) Vienna as part of Superflux's first major solo exhibition, The Craftocene.\n\nImages by Matt Edgson\n",
       "cx": 60,
       "cy": 5660,
       "main": {
