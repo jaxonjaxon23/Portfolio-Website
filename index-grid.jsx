@@ -7,8 +7,8 @@ function TitleCard({ p }) {
   const isSuperflux = p.client && p.client.toLowerCase().includes('superflux');
   return (
     <div style={{
-      border: '1px solid rgba(255,255,255,0.32)', borderRadius: 9,
-      padding: '12px 14px', marginBottom: 10, background: 'rgba(0,0,0,0.18)',
+      border: 'none', borderRadius: 9,
+      padding: '12px 14px', marginBottom: 10, background: '#000',
       fontFamily: FONT, color: '#fff', fontSize: 12, lineHeight: 1.45,
     }}>
       <div style={{ fontWeight: 600, letterSpacing: '0.03em' }}>{p.title}</div>
@@ -27,8 +27,8 @@ function KeywordsCard({ p }) {
   if (!p.keywords || !p.keywords.length) return null;
   return (
     <div style={{
-      border: '1px solid rgba(255,255,255,0.18)', borderRadius: 9,
-      padding: '11px 14px', marginBottom: 14, background: 'rgba(0,0,0,0.12)',
+      border: 'none', borderRadius: 9,
+      padding: '11px 14px', marginBottom: 14, background: '#000',
       fontFamily: FONT, fontSize: 12, lineHeight: 1.5,
     }}>
       <div style={{ color: '#8FB8FF', marginBottom: 3 }}>key words:</div>
@@ -190,15 +190,6 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover }) {
             <GalleryItem item={item} rounded />
           </div>
         ))}
-        {effective < p.gallery.length && (
-          <div data-clickable onClick={() => onOpen(p)}
-            style={{
-              fontFamily: FONT, fontSize: 11, color: 'rgba(255,255,255,0.32)',
-              padding: '4px 0', cursor: 'pointer', letterSpacing: '0.04em',
-            }}>
-            +{p.gallery.length - effective} more
-          </div>
-        )}
       </div>
     </div>
   );

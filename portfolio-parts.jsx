@@ -23,8 +23,20 @@ function GalleryItem({ item, rounded }) {
   const radius = rounded ? 4 : 0;
   if (item.type === 'video') {
     return (
-      <video src={item.src} autoPlay loop muted playsInline
-      ref={(el) => { if (el) { el.defaultMuted = true; el.muted = true; el.volume = 0; } }}
+      <video src={item.src} autoPlay loop muted playsInline preload="metadata"
+      ref={(el) => {
+        if (!el) return;
+        el.defaultMuted = true; el.muted = true; el.volume = 0;
+        if (el.__visObs) return;
+        // pause when off screen — decoding hidden loops is pure waste
+        el.__visObs = new IntersectionObserver((entries) => {
+          entries.forEach((en) => {
+            if (en.isIntersecting) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+            else el.pause();
+          });
+        }, { rootMargin: '150px' });
+        el.__visObs.observe(el);
+      }}
       onVolumeChange={(e) => { const el = e.currentTarget; if (!el.muted || el.volume !== 0) { el.muted = true; el.volume = 0; } }}
       onLoadedMetadata={(e) => { e.currentTarget.muted = true; e.currentTarget.volume = 0; }}
       style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }}></video>);
@@ -207,7 +219,7 @@ function BubbleNav() {
           ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22V13"/><path d="M12 13c0-5-6-8-10-7 0 5 4 8 10 7"/><path d="M12 13c0-5 6-8 10-7 0 5-4 8-10 7"/></svg>
           : <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span>}
       </span>
-      <button data-clickable style={btn(cur === 'index')} onClick={() => go('index')}>Index</button>
+      <button data-clickable style={btn(cur === 'index')} onClick={() => go('index')}>Projects</button>
     </div>
   );
 }
@@ -238,7 +250,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
       padding: '22px 24px', zIndex: 25,
     }}>
       <BubbleNav />
-      <div style={{ fontWeight: 700 }}>{bio.name || 'Jaxon Stickler'}</div>
+      <div style={{ fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.15, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
       <div style={{ ...italic, marginBottom: 16 }}>{bio.role || 'Designer/Artist'}</div>
 
       <div style={{ ...italic, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{bio.statement || ''}</div>
@@ -332,7 +344,7 @@ function BioShort({ locationStyle, top = 19, mobile = false, contact = true }) {
       padding: '22px 24px', zIndex: 25,
     }}>
       <BubbleNav />
-      <div style={{ fontWeight: 700 }}>{bio.name || 'Jaxon Stickler'}</div>
+      <div style={{ fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.15, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
       <div>{bio.role || 'Designer/Artist'}</div>
       <div style={{ height: 16 }} />
       <div><LocationSignifier style={locationStyle} /></div>
@@ -377,16 +389,28 @@ function Footer({ left, navPosition = 'bottom-left' }) {
 
 }
 
+// A plain div that inlines an entity SVG (no iframe — see entity-inline.js).
+function EntityCanvas({ url, style }) {
+  const ref = usePRef(null);
+  usePEffect(() => {
+    if (ref.current && window.mountEntity) window.mountEntity(ref.current, url);
+  }, [url]);
+  return <div ref={ref} aria-hidden="true" style={style} />;
+}
+
 // ---------------------------------------------------------------- vector entities
 // Animated "living edges" entity — persistent overlay across every view.
 function AnimatedEntity() {
   const isMob = useMobile();
   if (isMob) return null;
   return (
-    <iframe src="entities/vector-entity-1.html" title="" scrolling="no"
+    <EntityCanvas url="entities/vector-entity-1.html"
     style={{
-      position: 'fixed', left: 197, top: -133, width: 331, height: 468,
-      border: 'none', background: 'transparent', zIndex: 30, pointerEvents: 'none'
+      position: 'fixed',
+      left: 'calc(197px + var(--se-dx, 0px))',
+      top: 'calc(-133px + var(--se-dy, 0px))',
+      width: 331, height: 468,
+      zIndex: 30, pointerEvents: 'none'
     }} />);
 
 }
@@ -396,16 +420,21 @@ function AnimatedEntity() {
 // Rendered in an iframe wrapped by a draggable div (an iframe would otherwise
 // swallow the drag); the iframe is sized so its 90vh SVG lands at ~503×712.
 // Draggable when positions are unlocked; position persists in localStorage.
-const LARGE_ENTITY_KEY = 'large-entity-pos-v1';
-const LARGE_ENTITY_DEFAULT = { left: -40, bottom: 40 };
+// Anchored to the floating info bubble (fixed at left:24, top:19, width:345),
+// NOT to the viewport — so the entity hugs the UI identically on every screen
+// size instead of drifting with viewport height. Stored position is an OFFSET
+// from the bubble's top-left corner.
+const LARGE_ENTITY_KEY = 'large-entity-pos-v2';
+const BUBBLE_ANCHOR = { left: 24, top: 19 };
+const LARGE_ENTITY_DEFAULT = { dx: -64, dy: 106 };
 
 function LargeEntity({ locked = true }) {
   const isMob = useMobile();
-  // null  → use the bottom-anchored default; {left,top} → user has dragged it
+  // {dx,dy} offset from the bubble's top-left; null → default offset
   const [pos, setPos] = usePState(() => {
     try {
       const s = JSON.parse(window.layoutGet(LARGE_ENTITY_KEY));
-      if (s && typeof s.left === 'number' && typeof s.top === 'number') return s;
+      if (s && typeof s.dx === 'number' && typeof s.dy === 'number') return s;
     } catch (_) {}
     return null;
   });
@@ -417,7 +446,7 @@ function LargeEntity({ locked = true }) {
     const onMove = (e) => {
       const d = dragRef.current;
       if (!d) return;
-      setPos({ left: e.clientX - d.offX, top: e.clientY - d.offY });
+      setPos({ dx: e.clientX - d.offX - BUBBLE_ANCHOR.left, dy: e.clientY - d.offY - BUBBLE_ANCHOR.top });
     };
     const onUp = () => {
       if (dragRef.current) {
@@ -439,8 +468,8 @@ function LargeEntity({ locked = true }) {
 
   const nudge = (dx, dy) => {
     setPos((p) => {
-      const base = p || { left: LARGE_ENTITY_DEFAULT.left, top: window.innerHeight - LARGE_ENTITY_DEFAULT.bottom - 792 };
-      const next = { left: base.left + dx, top: base.top + dy };
+      const base = p || LARGE_ENTITY_DEFAULT;
+      const next = { dx: base.dx + dx, dy: base.dy + dy };
       try { localStorage.setItem(LARGE_ENTITY_KEY, JSON.stringify(next)); } catch (_) {}
       return next;
     });
@@ -455,9 +484,11 @@ function LargeEntity({ locked = true }) {
     <div ref={elRef} onMouseDown={onDown}
     style={{
       position: 'fixed',
-      left: pos ? pos.left : LARGE_ENTITY_DEFAULT.left,
-      top: pos ? pos.top : undefined,
-      bottom: pos ? undefined : LARGE_ENTITY_DEFAULT.bottom,
+      // Offsets come from the Tweaks sliders as CSS vars (fall back to the
+      // dragged/stored position, then the default) — a var change repositions
+      // without re-rendering the 1300-path SVG.
+      left: 'calc(' + (BUBBLE_ANCHOR.left + (pos ? pos.dx : LARGE_ENTITY_DEFAULT.dx)) + 'px + var(--le-dx, 0px))',
+      top: 'calc(' + (BUBBLE_ANCHOR.top + (pos ? pos.dy : LARGE_ENTITY_DEFAULT.dy)) + 'px + var(--le-dy, 0px))',
       width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
       zIndex: 28,
@@ -467,8 +498,8 @@ function LargeEntity({ locked = true }) {
       outline: locked ? 'none' : '1px dashed rgba(255,255,255,0.35)',
       outlineOffset: 4
     }}>
-      <iframe src="entities/vector-entity-2.html" title="" scrolling="no"
-      style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', display: 'block', pointerEvents: 'none' }} />
+      <EntityCanvas url="entities/vector-entity-2.html"
+      style={{ width: '100%', height: '100%', pointerEvents: 'none' }} />
       {!locked &&
       <div onMouseDown={(e) => e.stopPropagation()}
         style={{
@@ -518,10 +549,10 @@ function MobileEntityAnchor({ which }) {
     // desktop: entity left 197,top -133 vs bubble left24,top19,w345
     //   => dx=+173 (~50% of bubble width), dy=-152 (above bubble top)
     return (
-      <iframe src="entities/vector-entity-1.html" title="" scrolling="no" aria-hidden="true"
+      <EntityCanvas url="entities/vector-entity-1.html"
       style={{
         position: 'absolute', left: 150, top: -152, width: 331, height: 468,
-        border: 'none', background: 'transparent', pointerEvents: 'none', zIndex: 6,
+        pointerEvents: 'none', zIndex: 6,
       }} />);
   }
   // Mobile phone viewports are often barely taller than the bubble itself, so
@@ -529,11 +560,11 @@ function MobileEntityAnchor({ which }) {
   // (unlike desktop's tall viewport). Overlap the bubble's own lower portion
   // instead, so it's reliably visible, while still extending past the bottom.
   return (
-    <iframe src="entities/vector-entity-2.html" title="" scrolling="no" aria-hidden="true"
+    <EntityCanvas url="entities/vector-entity-2.html"
     style={{
       position: 'absolute', left: -180, top: 'calc(100% - 510px)', width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
-      border: 'none', background: 'transparent', pointerEvents: 'none', opacity: 0.8, zIndex: 6,
+      pointerEvents: 'none', opacity: 0.8, zIndex: 6,
     }} />);
 
 }

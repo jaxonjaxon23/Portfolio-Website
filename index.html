@@ -25,11 +25,11 @@
   html.light-mode image-slot,
   html.light-mode [data-keep-color] { filter: invert(1) hue-rotate(180deg); }
   #theme-toggle {
-    position: fixed; right: 22px; bottom: 22px; left: auto; top: auto; z-index: 100001;
-    height: 32px; padding: 0 13px; border-radius: 16px;
+    position: fixed; right: 22px; bottom: 21px; left: auto; top: auto; z-index: 100001;
+    height: 24px; padding: 0 10px; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.06);
-    color: #fff; cursor: pointer; display: flex; align-items: center; gap: 7px;
-    font-family: Inter, sans-serif; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; line-height: 1;
+    color: #fff; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    font-family: Inter, sans-serif; font-size: 12px; letter-spacing: 0.02em; line-height: 1;
     backdrop-filter: blur(6px);
     transition: transform .25s ease, background .2s ease, border-color .2s ease;
   }
@@ -83,6 +83,7 @@
 <script src="remote-content.js"></script>
 <script src="depth-cloud.js"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
+<script src="entity-inline.js"></script>
 <script type="text/babel" src="portfolio-parts.jsx"></script>
 <script type="text/babel" src="diagram.jsx"></script>
 <script type="text/babel" src="index-grid.jsx"></script>
@@ -123,22 +124,18 @@
       (window.PROJECTS || []).forEach(function (p) {
         if (p.main && p.main.src) urls.push(p.main.src);
         (p.sats || []).forEach(function (s) { if (s.src) urls.push(s.src); });
-        // Preload EVERY image in every gallery so opening any project page
-        // (and scrolling its gallery) never shows pop-in. Videos/embeds are
-        // skipped — they stream on demand and can't be fully prefetched.
-        (p.gallery || []).forEach(function (g) {
-          if (g && g.type === 'image' && g.src) urls.push(g.src);
-        });
+        // Only the index/projects-page thumbnails are preloaded. Project-page
+        // galleries load on demand (GalleryItem already uses loading="lazy"),
+        // which keeps the initial wait short.
       });
     } catch (e) {}
     // de-dupe
     urls = urls.filter(function (u, i) { return u && urls.indexOf(u) === i; });
-    // entity iframes render on the About page — warm them so they don't pop in
-    var frames = ['entities/vector-entity-1.html', 'entities/vector-entity-2.html'];
+    var frames = [];
     var total = urls.length + frames.length, loaded = 0;
     if (!total) { finish(); return; }
     // hard cap so a slow/missing asset can't trap the user (full preload is large)
-    var cap = setTimeout(finish, 20000);
+    var cap = setTimeout(finish, 8000);
     function tick() {
       loaded++;
       realPct = Math.round((loaded / total) * 100);

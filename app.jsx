@@ -11,7 +11,12 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "bubbleOpacity": 1,
   "bubbleNavGraphic": false,
   "nodesLocked": true,
-  "bgDarkness": 100
+  "bgDarkness": 100,
+  "nameSize": "medium",
+  "entityX": -92,
+  "entityY": -106,
+  "smallEntityX": 0,
+  "smallEntityY": -26
 } /*EDITMODE-END*/;
 
 // hover readout for the diagram — positioned dynamically below the bio panel
@@ -161,6 +166,27 @@ function App() {
     localStorage.setItem('theme', light ? 'light' : 'dark');
   }, [light]);
 
+  // Large entity nudge (offset from its bubble-anchored home).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--le-dx', (t.entityX || 0) + 'px');
+    document.documentElement.style.setProperty('--le-dy', (t.entityY || 0) + 'px');
+    document.documentElement.style.setProperty('--se-dx', (t.smallEntityX || 0) + 'px');
+    document.documentElement.style.setProperty('--se-dy', (t.smallEntityY || 0) + 'px');
+  }, [t.entityX, t.entityY, t.smallEntityX, t.smallEntityY]);
+
+  // Name size in the floating bubble.
+  useEffect(() => {
+    const NAME = {
+      small:  ['12px', '0'],
+      medium: ['17px', '-0.01em'],
+      large:  ['23px', '-0.02em'],
+      xlarge: ['30px', '-0.03em'],
+    };
+    const v = NAME[t.nameSize] || NAME.medium;
+    document.documentElement.style.setProperty('--name-size', v[0]);
+    document.documentElement.style.setProperty('--name-track', v[1]);
+  }, [t.nameSize]);
+
   // Background darkness slider → CSS var (non-canvas areas) + WebGL clear color.
   useEffect(() => {
     const pct = Math.max(0, Math.min(100, Number.isFinite(t.bgDarkness) ? t.bgDarkness : 100));
@@ -296,6 +322,10 @@ function App() {
         onChange={(v) => setTweak('navPosition', v)} />
 
         <TweakSection label="Bubble" />
+        <TweakRadio label="Name size"
+        value={t.nameSize} options={['small', 'medium', 'large', 'xlarge']}
+        onChange={(v) => setTweak('nameSize', v)} />
+
         <TweakSlider label="Bubble opacity"
         value={t.bubbleOpacity} min={0.3} max={1} step={0.05}
         onChange={(v) => setTweak('bubbleOpacity', v)} />
@@ -315,6 +345,22 @@ function App() {
         <TweakSlider label="Default preview images"
         value={t.imageLimit} min={1} max={20} step={1}
         onChange={(v) => setTweak('imageLimit', v)} />
+
+        <TweakSection label="Small entity" />
+        <TweakSlider label="Move horizontally"
+        value={t.smallEntityX} min={-500} max={500} step={2} unit="px"
+        onChange={(v) => setTweak('smallEntityX', v)} />
+        <TweakSlider label="Move vertically"
+        value={t.smallEntityY} min={-500} max={500} step={2} unit="px"
+        onChange={(v) => setTweak('smallEntityY', v)} />
+
+        <TweakSection label="Large entity" />
+        <TweakSlider label="Move horizontally"
+        value={t.entityX} min={-400} max={400} step={2} unit="px"
+        onChange={(v) => setTweak('entityX', v)} />
+        <TweakSlider label="Move vertically"
+        value={t.entityY} min={-400} max={400} step={2} unit="px"
+        onChange={(v) => setTweak('entityY', v)} />
 
         <TweakSection label="Background" />
         <TweakSlider label="Darkness"

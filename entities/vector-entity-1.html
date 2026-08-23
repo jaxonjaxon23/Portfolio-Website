@@ -1495,9 +1495,22 @@
         return set.amp * s;
       }
 
+      // Cost control: this drawing has 1300+ paths. Sway only the most
+      // outboard nodes (largest amplitude, most visible) and leave the rest
+      // static — the silhouette still reads as alive at a fraction of the work.
+      var MAX_SWAY_NODES = 45;
+      var swayable = [];
+      for (var sa = 0; sa < nodes.length; sa++)
+        if (nodes[sa].dist >= thresh) swayable.push(nodes[sa]);
+      swayable.sort(function (x, y) { return y.dist - x.dist; });
+      var swayKeep = Object.create(null);
+      for (var sk = 0; sk < Math.min(MAX_SWAY_NODES, swayable.length); sk++)
+        swayKeep[swayable[sk].id != null ? swayable[sk].id : sk] = swayable[sk];
+      var swaySet = swayable.slice(0, MAX_SWAY_NODES);
+
       var animatedNodes = [];
-      for (var a = 0; a < nodes.length; a++) {
-        var node = nodes[a];
+      for (var a = 0; a < swaySet.length; a++) {
+        var node = swaySet[a];
         if (node.dist < thresh) continue;
         var ramp = (node.dist - thresh) / span;
         var base = AMP_MIN + (AMP_MAX - AMP_MIN) * ramp;
@@ -1643,10 +1656,19 @@
 
       // ---------- requestAnimationFrame loop -----------------------------
       var clock = 0, last = null, raf = 0;
+      var ENT_MIN_DT = 1 / 20 - 0.002;   // cap at ~20fps: modest machines first
+      var acc = 0;
       function frame(now) {
+        if (!svg.isConnected) { raf = 0; return; }
+        raf = requestAnimationFrame(frame);
+        // hidden (display:none ancestor, or backgrounded tab) → do no work
+        if (!svg.getClientRects().length) { last = null; return; }
         if (last === null) last = now;
         var dt = (now - last) / 1000; if (dt > 0.05) dt = 0.05;
-        last = now; clock += dt;
+        last = now;
+        acc += dt;
+        if (acc < ENT_MIN_DT) return;    // skip this frame entirely
+        clock += acc; acc = 0;
         var t = clock;
 
         maybeSpawn(t);
@@ -1672,8 +1694,6 @@
         // 3) rebuild only the paths that move
         for (var r = 0; r < renderSet.length; r++)
           renderSet[r].el.setAttribute("d", buildPathData(renderSet[r].struct));
-
-        raf = requestAnimationFrame(frame);
       }
       raf = requestAnimationFrame(frame);
 
