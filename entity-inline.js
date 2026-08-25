@@ -25,10 +25,34 @@
     styleDone[url] = true;
     var css = "";
     doc.querySelectorAll("head style").forEach(function (s) { css += s.textContent + "\n"; });
-    css = css
-      .replace(/html\s*,\s*body\s*\{[^}]*\}/g, "")
-      .replace(/\.stage\s*\{[^}]*\}/g, "")
-      .replace(/#entity\b/g, ".fig-entity");
+    // These stylesheets come from STANDALONE pages, so they carry rules meant to
+    // size a full-window drawing: body{overflow:hidden}, .stage layout, and
+    // viewport-relative sizing on #entity. Injected into the host they leak —
+    // the body rule in particular kills native scrolling on mobile. Parse the
+    // rules properly (regex kept missing multiline variants) and keep only what
+    // is safe to apply inside the host document.
+    var sheetEl = document.createElement("style");
+    sheetEl.textContent = css.replace(/#entity\b/g, ".fig-entity");
+    document.head.appendChild(sheetEl);
+    var keep = [];
+    try {
+      var rules = sheetEl.sheet.cssRules;
+      for (var i = 0; i < rules.length; i++) {
+        var rule = rules[i];
+        var sel = rule.selectorText || "";
+        // page-level and standalone-shell selectors never belong in the host
+        if (/(^|[\s,])(html|body)($|[\s,:])/i.test(sel)) continue;
+        if (/\.stage\b/.test(sel)) continue;
+        if (sel === ":root" || !sel) { keep.push(rule.cssText); continue; }
+        // strip viewport-unit sizing that would fight the mount's inline size
+        var text = rule.cssText.replace(/[a-z-]+\s*:\s*[^;{}]*\d(?:vh|vw|vmin|vmax)[^;{}]*;?/gi, "");
+        keep.push(text);
+      }
+    } catch (e) {
+      keep = [];
+    }
+    document.head.removeChild(sheetEl);
+    css = keep.join("\n");
     var el = document.createElement("style");
     el.setAttribute("data-entity-style", url);
     css += "\n.fig-entity{contain:paint;}\n";

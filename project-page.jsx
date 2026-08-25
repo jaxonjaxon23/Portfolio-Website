@@ -257,7 +257,6 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
         <div style={{ position: 'relative', overflow: 'visible' }}>
           <BioShort locationStyle={locationStyle} mobile contact={false} />
           <window.MobileEntityAnchor which="small" />
-          <window.MobileEntityAnchor which="large" />
         </div>
         <ProjectInfo
           p={p} top={0} locked={locked} mobile
@@ -324,7 +323,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
       />
 
       <div ref={galleryRef}
-        style={{ marginLeft: 408, marginRight: 24, paddingTop: 19, paddingBottom: 120, maxWidth: 1180 }}>
+        style={{ marginLeft: 408, marginRight: 24, marginInlineStart: 'auto', paddingTop: 19, paddingBottom: 120, maxWidth: 1180 }}>
         {gallery.map((item, displayIdx) => {
           const origIdx = order[displayIdx];
           const widthPct = item.w != null ? item.w : (sizes[origIdx] != null ? sizes[origIdx] : 100);
@@ -340,6 +339,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
               style={{
                 marginBottom: 14,
                 width: widthPct + '%',
+                marginLeft: 'auto',
                 position: 'relative',
                 cursor: !locked ? (dragFrom !== null ? 'grabbing' : 'grab') : 'default',
                 opacity: !locked && dragFrom === displayIdx ? 0.35 : 1,

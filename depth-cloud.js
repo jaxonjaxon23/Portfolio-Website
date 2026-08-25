@@ -182,7 +182,11 @@ void main() {
 
     const target = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
     let interacting = false, idleTimer = 0;
+    // On touch devices the torch shouldn't chase taps — leave it on the calm
+    // idle drift so scrolling never triggers a re-render storm.
+    var IS_TOUCH = window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0;
     function setTarget(cx, cy) {
+      if (IS_TOUCH) return;
       const rect = canvas.getBoundingClientRect();
       target.x = ((cx - rect.left) / rect.width) * 2 - 1;
       target.y = -(((cy - rect.top) / rect.height) * 2 - 1);
@@ -192,10 +196,9 @@ void main() {
       idleTimer = setTimeout(() => { interacting = false; }, 2500);
     }
     const onMove = (e) => setTarget(e.clientX, e.clientY);
-    const onTouch = (e) => { if (e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('touchmove', onTouch, { passive: true });
-    window.addEventListener('touchstart', onTouch, { passive: true });
+    if (!IS_TOUCH) window.addEventListener('mousemove', onMove);
+    // touch listeners are deliberately NOT attached on touch devices: dragging
+    // to scroll would otherwise drive the torch and force constant redraws
 
     let raf = 0, count = 0, alive = true;
 
@@ -271,8 +274,6 @@ void main() {
       cancelAnimationFrame(raf);
       clearTimeout(idleTimer);
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onTouch);
-      window.removeEventListener('touchstart', onTouch);
       window.removeEventListener('resize', resize);
     };
   };

@@ -88,7 +88,11 @@ function DepthCloud() {
 // ---------------------------------------------------------------- custom cursor (+)
 function CustomCursor({ enabled = true }) {
   const ref = usePRef(null);
+  // Touch devices have no pointer to follow — mounting this only costs work.
+  const isTouch = typeof window !== 'undefined' &&
+    (window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0);
   usePEffect(() => {
+    if (isTouch) return;
     if (!enabled) return;
     const el = ref.current;
     if (!el) return;
@@ -133,7 +137,7 @@ function CustomCursor({ enabled = true }) {
     };
   }, [enabled]);
 
-  if (!enabled) return null;
+  if (!enabled || isTouch) return null;
   return (
     <div ref={ref} style={{
       position: 'fixed', top: 0, left: 0, width: 16, height: 16,
