@@ -3,12 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
 <title>Portfolio CMS — Jaxon Stickler</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* Tell the browser this UI is already dark. Without it, Edge/Chrome "force dark"
+     repaints the white .ad-btn to dark-on-dark, making Save look like it's missing. */
+  :root { color-scheme: dark; }
   :root {
     --bg: #0b0c0d; --panel: #151619; --panel2: #1c1e22; --line: rgba(255,255,255,0.12);
     --line2: rgba(255,255,255,0.07); --txt: #f3f3f3; --dim: rgba(255,255,255,0.55);
@@ -31,13 +35,14 @@
   .ad-input:focus, .ad-textarea:focus, .ad-select:focus { border-color: rgba(124,255,178,0.6); }
   .ad-textarea { min-height: 90px; line-height: 1.55; }
   .ad-btn {
-    background: #fff; color: #000; border: none; border-radius: 8px;
+    background: #fff; color: #000; border: 1px solid #fff; border-radius: 8px;
     padding: 9px 16px; font-weight: 600; cursor: pointer; letter-spacing: 0.02em;
+    forced-color-adjust: none; -webkit-text-fill-color: #000;
   }
   .ad-btn:hover { background: #e7e7e7; }
-  .ad-btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); }
+  .ad-btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); -webkit-text-fill-color: var(--txt); }
   .ad-btn.ghost:hover { background: rgba(255,255,255,0.06); }
-  .ad-btn.danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,107,107,0.4); }
+  .ad-btn.danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,107,107,0.4); -webkit-text-fill-color: var(--danger); }
   .ad-btn.danger:hover { background: rgba(255,107,107,0.1); }
   .ad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .ad-chip {
