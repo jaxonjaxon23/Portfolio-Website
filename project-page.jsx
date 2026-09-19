@@ -228,55 +228,53 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
   const [dragOver, setDragOver] = usePPState(null);
   const galleryRef = usePPRef(null);
 
-  // Eased (smooth) vertical wheel scrolling for the gallery
+  // Eased (smooth) vertical wheel scrolling for the gallery.
+  // The eased position is tracked in `pos` rather than re-read from
+  // window.scrollY: the browser snaps scroll offsets to device pixels, so
+  // re-reading made the ease stall a pixel or two short of the target and the
+  // loop never finished — it then kept dragging the page back whenever the
+  // user scrolled another way (scrollbar, keyboard, find-in-page).
   usePPEffect(() => {
-    let targetY = window.scrollY, animating = false, raf = 0;
+    let pos = window.scrollY, targetY = pos, raf = 0;
     const maxY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const stop = () => { cancelAnimationFrame(raf); raf = 0; };
     const tick = () => {
-      const cur = window.scrollY;
-      const next = cur + (targetY - cur) * 0.13;
-      if (Math.abs(targetY - cur) < 0.5) { window.scrollTo(0, targetY); animating = false; return; }
-      window.scrollTo(0, next); raf = requestAnimationFrame(tick);
+      pos += (targetY - pos) * 0.13;
+      if (Math.abs(targetY - pos) < 0.5) pos = targetY;
+      window.scrollTo(0, pos);
+      raf = pos === targetY ? 0 : requestAnimationFrame(tick);
+    };
+    // Let scrollable panels under the cursor (e.g. a long info panel) scroll natively.
+    const nestedCanScroll = (el, dy) => {
+      for (; el && el !== document.body; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+          if (dy < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+        }
+      }
+      return false;
     };
     const onWheel = (e) => {
       if (e.ctrlKey) return;            // let pinch-zoom through
-      if (!animating) targetY = window.scrollY;
-      targetY = Math.max(0, Math.min(maxY(), targetY + e.deltaY));
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (nestedCanScroll(e.target, e.deltaY)) return;
+      if (!raf) pos = targetY = window.scrollY;
+      targetY = Math.max(0, Math.min(maxY(), targetY + wheelPx(e.deltaY, e.deltaMode, window.innerHeight)));
       e.preventDefault();
-      if (!animating) { animating = true; raf = requestAnimationFrame(tick); }
+      if (!raf) raf = requestAnimationFrame(tick);
     };
+    // Something else moved the page mid-ease (scrollbar drag, keys) — yield to it.
+    const onScroll = () => { if (raf && Math.abs(window.scrollY - pos) > 2) stop(); };
     window.addEventListener('wheel', onWheel, { passive: false });
-    return () => { window.removeEventListener('wheel', onWheel); cancelAnimationFrame(raf); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('scroll', onScroll);
+      stop();
+    };
   }, [p.id]);
 
   const gallery = order.map((i) => p.gallery[i]);
-
-  if (mobile) {
-    return (
-      <div style={{ paddingBottom: 100 }}>
-        <div style={{ position: 'relative', overflow: 'visible' }}>
-          <BioShort locationStyle={locationStyle} mobile contact={false} />
-          <window.MobileEntityAnchor which="small" />
-        </div>
-        <ProjectInfo
-          p={p} top={0} locked={locked} mobile
-          order={order} onReorder={handleReorder}
-          sizes={sizes} onStartResize={startResize}
-          galleryRef={galleryRef}
-        />
-        <div ref={galleryRef} style={{ padding: '12px 16px', paddingBottom: 80 }}>
-          {gallery.map((item, displayIdx) => {
-            const origIdx = order[displayIdx];
-            return (
-              <div key={origIdx} style={{ marginBottom: 10 }}>
-                <GalleryItem item={item} rounded />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
 
   const handleReorder = (next) => {
     setOrder(next);
@@ -311,6 +309,33 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
+
+  if (mobile) {
+    return (
+      <div style={{ paddingBottom: 100 }}>
+        <div style={{ position: 'relative', overflow: 'visible' }}>
+          <BioShort locationStyle={locationStyle} mobile contact={false} />
+          <window.MobileEntityAnchor which="small" />
+        </div>
+        <ProjectInfo
+          p={p} top={0} locked={locked} mobile
+          order={order} onReorder={handleReorder}
+          sizes={sizes} onStartResize={startResize}
+          galleryRef={galleryRef}
+        />
+        <div ref={galleryRef} style={{ padding: '12px 16px', paddingBottom: 80 }}>
+          {gallery.map((item, displayIdx) => {
+            const origIdx = order[displayIdx];
+            return (
+              <div key={origIdx} style={{ marginBottom: 10 }}>
+                <GalleryItem item={item} rounded />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

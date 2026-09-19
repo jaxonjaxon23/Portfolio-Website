@@ -239,48 +239,57 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   useIEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    let targetLeft = el.scrollLeft, animating = false, raf = 0;
+    // Eased position is tracked in `pos` (not re-read from scrollLeft, which the
+    // browser snaps to device pixels and would stall the ease short of target).
+    let pos = el.scrollLeft, targetLeft = pos, raf = 0;
+    const stop = () => { cancelAnimationFrame(raf); raf = 0; };
     const tick = () => {
-      const cur = el.scrollLeft;
-      const next = cur + (targetLeft - cur) * 0.14;
-      if (Math.abs(targetLeft - cur) < 0.5) { el.scrollLeft = targetLeft; animating = false; return; }
-      el.scrollLeft = next; raf = requestAnimationFrame(tick);
+      pos += (targetLeft - pos) * 0.14;
+      if (Math.abs(targetLeft - pos) < 0.5) pos = targetLeft;
+      el.scrollLeft = pos;
+      raf = pos === targetLeft ? 0 : requestAnimationFrame(tick);
     };
     const onWheel = (e) => {
+      if (e.ctrlKey) return;            // let pinch-zoom through
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        if (!animating) targetLeft = el.scrollLeft;
+        if (!raf) pos = targetLeft = el.scrollLeft;
         const max = el.scrollWidth - el.clientWidth;
-        targetLeft = Math.max(0, Math.min(max, targetLeft + e.deltaY));
+        targetLeft = Math.max(0, Math.min(max, targetLeft + wheelPx(e.deltaY, e.deltaMode, el.clientWidth)));
         e.preventDefault();
-        if (!animating) { animating = true; raf = requestAnimationFrame(tick); }
+        if (!raf) raf = requestAnimationFrame(tick);
       }
     };
+    // Something else moved the board mid-ease (trackpad swipe, scrollbar) — yield to it.
+    const onScroll = () => { if (raf && Math.abs(el.scrollLeft - pos) > 2) stop(); };
     el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('scroll', onScroll, { passive: true });
     let down = false, startX = 0, startScroll = 0;
     const onDown = (e) => {
       if (e.target && e.target.closest && e.target.closest('[data-clickable]')) return;
       if (e.target && e.target.closest && e.target.closest('[data-col-handle]')) return;
       down = true; startX = e.clientX; startScroll = el.scrollLeft;
-      animating = false; cancelAnimationFrame(raf);
+      stop();
       el.style.cursor = 'grabbing';
     };
-    const onMove = (e) => { if (!down) return; el.scrollLeft = startScroll - (e.clientX - startX); targetLeft = el.scrollLeft; };
+    const onMove = (e) => { if (!down) return; el.scrollLeft = startScroll - (e.clientX - startX); };
     const onUp = () => { down = false; el.style.cursor = ''; };
     el.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => {
       el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('scroll', onScroll);
       el.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      cancelAnimationFrame(raf);
+      stop();
     };
   }, []);
 
   return (
+    // overflowY auto: tall columns must stay reachable on short screens / phones
     <div ref={scrollRef} style={{
-      position: 'fixed', inset: 0, overflowX: 'auto', overflowY: 'hidden',
+      position: 'fixed', inset: 0, overflowX: 'auto', overflowY: 'auto',
       backgroundColor: 'rgba(8,9,10,0.62)',
       backgroundImage: 'radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)',
       backgroundSize: '26px 26px', cursor: 'grab',

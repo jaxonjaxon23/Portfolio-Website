@@ -103,28 +103,46 @@ void main() {
 
   // Adaptive quality — scale the work down on low-end / mobile / reduced-motion
   // so the background stays smooth on weak GPUs without changing the look on
-  // capable hardware. Detected once at init.
-  const QUALITY = (function () {
+  // capable hardware. A device guess picks the starting tier; a frame-time
+  // watchdog (see watch()) then steps down whenever the browser can't keep up,
+  // which the guess can't see (software WebGL, hardware acceleration switched
+  // off in that browser, very large high-DPI windows...).
+  // Clean fps caps only — 30/60 keep even frame cadence on 60/120Hz (avoids judder).
+  const TIERS = [
+    { cols: 560, dprCap: 1.5, fps: 60, drift: true },   // point count ∝ cols²
+    { cols: 360, dprCap: 1,   fps: 60, drift: true },
+    { cols: 360, dprCap: 1,   fps: 30, drift: true },
+    { cols: 360, dprCap: 1,   fps: 30, drift: false },  // last resort: redraw only while the pointer moves
+  ];
+  const START = (function () {
     const mm = (q) => !!(window.matchMedia && window.matchMedia(q).matches);
     const cores = navigator.hardwareConcurrency || 4;
-    const mem = navigator.deviceMemory || 4;
+    // deviceMemory only exists in Chromium browsers. Treat it as unknown
+    // elsewhere rather than as 4GB, which put every Firefox/Safari visitor on
+    // the low tier regardless of their hardware.
+    const mem = navigator.deviceMemory;
     const coarse = mm('(pointer: coarse)');
     const reduced = mm('(prefers-reduced-motion: reduce)');
-    const low = coarse || cores <= 4 || mem <= 4;
+    const low = coarse || cores <= 4 || (mem !== undefined && mem <= 4);
     return {
-      cols: low ? 360 : 560,      // point grid width; point count ∝ cols²
-      dprCap: low ? 1 : 1.5,      // was hard-capped at 2
-      // clean caps only — 30/60 keep even frame cadence on 60/120Hz (avoids judder)
-      fps: (low || reduced) ? 30 : 60,
+      tier: (low || reduced) ? 2 : 0,
       drift: reduced ? 0 : CONFIG.drift,
     };
   })();
 
   window.initDepthCloud = function initDepthCloud(canvas) {
-    const gl = canvas.getContext('webgl2', {
+    const attrs = {
       antialias: false, alpha: false, preserveDrawingBuffer: false,
       powerPreference: 'high-performance', desynchronized: true,
-    });
+    };
+    // Ask for a hardware context first. If the browser can only give a slow
+    // software one, still render, but start on the cheapest tier.
+    let gl = canvas.getContext('webgl2', Object.assign({ failIfMajorPerformanceCaveat: true }, attrs));
+    let tierIdx = START.tier;
+    if (!gl) {
+      gl = canvas.getContext('webgl2', attrs);
+      tierIdx = TIERS.length - 1;
+    }
     if (!gl) { console.warn('WebGL2 unavailable — depth cloud disabled'); return function () {}; }
 
     function compile(type, src) {
@@ -170,8 +188,24 @@ void main() {
       });
     }
 
+    let tier = TIERS[tierIdx];
+    let sceneAspect = 0;                  // known once the scene texture loads
+    let ease = 0, minDelta = 0;
+    function applyTier() {
+      tier = TIERS[tierIdx];
+      // frame-rate-independent ease so the cursor follow feels the same at any fps cap
+      ease = 1 - Math.pow(1 - CONFIG.ease, 60 / tier.fps);
+      minDelta = 1000 / tier.fps - 0.5;
+      if (!sceneAspect) return;
+      const rows = Math.round(tier.cols / sceneAspect);
+      count = tier.cols * rows;
+      gl.uniform2f(loc.uGrid, tier.cols, rows);
+      resize();
+      lastDraw = -Infinity;               // force a redraw at the new quality
+    }
+
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, QUALITY.dprCap);
+      const dpr = Math.min(window.devicePixelRatio || 1, tier.dprCap);
       const w = Math.floor(canvas.clientWidth * dpr);
       const h = Math.floor(canvas.clientHeight * dpr);
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -208,12 +242,10 @@ void main() {
         loadTexture(CONFIG.depth, 1),
       ]);
       if (!alive) return;
-      const rows = Math.round(QUALITY.cols / (scene.w / scene.h));
-      count = QUALITY.cols * rows;
+      sceneAspect = scene.w / scene.h;
       gl.uniform1i(loc.uScene, 0);
       gl.uniform1i(loc.uDepth, 1);
-      gl.uniform2f(loc.uGrid, QUALITY.cols, rows);
-      gl.uniform1f(loc.uAspect, scene.w / scene.h);
+      gl.uniform1f(loc.uAspect, sceneAspect);
       gl.uniform1f(loc.uZScale, CONFIG.zScale);
       gl.uniform1f(loc.uLight, CONFIG.light);
       gl.uniform1f(loc.uFalloff, CONFIG.falloff);
@@ -227,29 +259,47 @@ void main() {
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      resize();
+      applyTier();                        // sets the grid and sizes the canvas
       window.addEventListener('resize', resize);
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
+      // let page start-up (script compile, image decode) finish before judging speed
+      watchFrom = performance.now() + 3000;
       raf = requestAnimationFrame(frame);
     })().catch((err) => console.error(err));
 
-    // frame-rate-independent ease so the cursor follow feels the same at any fps cap
-    const ease = 1 - Math.pow(1 - CONFIG.ease, 60 / QUALITY.fps);
-    const minDelta = 1000 / QUALITY.fps - 0.5;
     let lastDraw = -Infinity, lastBg = -1;
+
+    // Watchdog: average the gap between animation frames over ~2s windows. A
+    // healthy page gets a frame every ~7-17ms whatever our own fps cap is; if
+    // the whole page has dropped under ~36fps, step the background down a tier.
+    let watchFrom = Infinity, lastT = 0, gapSum = 0, gapN = 0;
+    function watch(t) {
+      const gap = t - lastT;
+      lastT = t;
+      if (t < watchFrom || gap > 250) return;   // start-up, or a one-off stall / tab switch
+      gapSum += gap; gapN++;
+      if (gapSum < 2000) return;
+      if (gapSum / gapN > 28 && tierIdx < TIERS.length - 1) {
+        tierIdx++;
+        applyTier();
+        watchFrom = t + 1000;                   // let the new tier settle before re-judging
+      }
+      gapSum = 0; gapN = 0;
+    }
 
     function frame(t) {
       if (!alive) return;
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;          // pause GPU work when tab/page not visible
+      watch(t);
       if (t - lastDraw < minDelta) return;  // cap frame rate for low-end smoothness
 
-      const drifting = !interacting && QUALITY.drift > 0;
+      const drifting = !interacting && tier.drift && START.drift > 0;
       if (drifting) {
         const s = t * 0.00025;
-        target.x = Math.cos(s * 0.85) * QUALITY.drift;
-        target.y = Math.sin(s * 1.25) * QUALITY.drift * 0.65;
+        target.x = Math.cos(s * 0.85) * START.drift;
+        target.y = Math.sin(s * 1.25) * START.drift * 0.65;
       }
       const dx = target.x - mouse.x, dy = target.y - mouse.y;
       var bg = window.__bgRGB || [0, 0, 0];

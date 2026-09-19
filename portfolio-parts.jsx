@@ -16,6 +16,16 @@ function useMobile() {
 }
 
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+// Wheel delta in pixels. Some browsers/mice (notably Firefox) report deltaY in
+// lines (deltaMode 1) or pages (2), e.g. 3 per notch, which would otherwise
+// move an eased scroller only a few pixels per notch.
+function wheelPx(delta, deltaMode, pageSize) {
+  if (deltaMode === 1) return delta * 40;
+  if (deltaMode === 2) return delta * pageSize;
+  return delta;
+}
+
 const DEPTH_BG = 'images/about/depth-bg.png';
 
 // ---------------------------------------------------------------- gallery item
@@ -228,22 +238,48 @@ function BubbleNav() {
   );
 }
 
+// Image that follows the cursor while a "working on" item is hovered. It tracks
+// the mouse itself (writing styles directly) and only exists while hovering, so
+// the bio no longer re-renders on every mouse move anywhere on the page.
+function CursorPreview({ img, x, y }) {
+  const ref = usePRef(null);
+  const left = (cx) => Math.min(cx + 24, window.innerWidth - 202) + 'px';
+  const top = (cy) => Math.max(16, cy - 50) + 'px';
+  usePEffect(() => {
+    const onMove = (e) => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.left = left(e.clientX);
+      el.style.top = top(e.clientY);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+  return ReactDOM.createPortal(
+    <div ref={ref} style={{
+      position: 'fixed',
+      left: left(x),
+      top: top(y),
+      width: 186,
+      pointerEvents: 'none',
+      zIndex: 9997,
+      boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
+      borderRadius: 3,
+      overflow: 'hidden',
+    }}>
+      <img src={img} alt="" draggable="false" style={{ width: '100%', display: 'block' }} />
+    </div>,
+    document.body
+  );
+}
+
 const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = false }, ref) {
   const italic = { opacity: 0.92 };
   const [wip1, setWip1] = usePState(false);
   const [wip2, setWip2] = usePState(false);
-  const [mx, setMx] = usePState(0);
-  const [my, setMy] = usePState(0);
-
-  usePEffect(() => {
-    const onMove = (e) => { setMx(e.clientX); setMy(e.clientY); };
-    window.addEventListener('mousemove', onMove);
-    return () => window.removeEventListener('mousemove', onMove);
-  }, []);
-
   const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
   const working = Array.isArray(bio.working) ? bio.working : [];
-  const [hovIdx, setHovIdx] = usePState(-1);
+  const [hov, setHov] = usePState(null); // { i, x, y } while a "working on" item with an image is hovered
   return (
     <div ref={ref} id={mobile ? undefined : 'about-bubble'} style={mobile ? {
       ...BUBBLE, position: 'relative', width: '100%', boxSizing: 'border-box',
@@ -272,8 +308,8 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
       {working.map((w, i) =>
       <div key={i}
         style={{ ...italic, fontWeight: 600, marginBottom: 12 }}
-        onMouseEnter={() => setHovIdx(w.img ? i : -1)}
-        onMouseLeave={() => setHovIdx(-1)}>
+        onMouseEnter={(e) => setHov(w.img ? { i, x: e.clientX, y: e.clientY } : null)}
+        onMouseLeave={() => setHov(null)}>
         {w.text}
       </div>
       )}
@@ -316,23 +352,9 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
         textUnderlineOffset: 3, fontSize: 12, cursor: 'pointer'
       }}>Download CV</a>
 
-      {hovIdx >= 0 && working[hovIdx] && working[hovIdx].img && ReactDOM.createPortal(
-        <div style={{
-          position: 'fixed',
-          left: Math.min(mx + 24, window.innerWidth - 202),
-          top: Math.max(16, my - 50),
-          width: 186,
-          pointerEvents: 'none',
-          zIndex: 9997,
-          boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
-          borderRadius: 3,
-          overflow: 'hidden',
-        }}>
-          <img src={working[hovIdx].img}
-            alt="" draggable="false" style={{ width: '100%', display: 'block' }} />
-        </div>,
-        document.body
-      )}
+      {hov && working[hov.i] && working[hov.i].img &&
+      <CursorPreview img={working[hov.i].img} x={hov.x} y={hov.y} />
+      }
     </div>);
 
 });

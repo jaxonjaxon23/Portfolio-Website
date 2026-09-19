@@ -300,7 +300,7 @@ function App() {
       }
 
       {project &&
-      <ProjectPage p={project} locationStyle={t.locationStyle} locked={t.nodesLocked} mobile={isMobile} />
+      <ProjectPage key={project.id} p={project} locationStyle={t.locationStyle} locked={t.nodesLocked} mobile={isMobile} />
       }
 
       <Footer left={footerLeft} navPosition={t.navPosition} />
