@@ -107,10 +107,12 @@ void main() {
   // watchdog (see watch()) then steps down whenever the browser can't keep up,
   // which the guess can't see (software WebGL, hardware acceleration switched
   // off in that browser, very large high-DPI windows...).
-  // Clean fps caps only — 30/60 keep even frame cadence on 60/120Hz (avoids judder).
+  // Always 30fps: the slow torch glow looks the same, and it roughly halves the
+  // GPU load (measured ~58% → ~35% on an integrated laptop GPU), which is what
+  // was dropping frames elsewhere on the page. 30 also keeps an even cadence on
+  // 60/120Hz displays (avoids judder).
   const TIERS = [
-    { cols: 560, dprCap: 1.5, fps: 60, drift: true },   // point count ∝ cols²
-    { cols: 360, dprCap: 1,   fps: 60, drift: true },
+    { cols: 560, dprCap: 1.5, fps: 30, drift: true },   // point count ∝ cols²
     { cols: 360, dprCap: 1,   fps: 30, drift: true },
     { cols: 360, dprCap: 1,   fps: 30, drift: false },  // last resort: redraw only while the pointer moves
   ];
@@ -125,7 +127,7 @@ void main() {
     const reduced = mm('(prefers-reduced-motion: reduce)');
     const low = coarse || cores <= 4 || (mem !== undefined && mem <= 4);
     return {
-      tier: (low || reduced) ? 2 : 0,
+      tier: (low || reduced) ? 1 : 0,
       drift: reduced ? 0 : CONFIG.drift,
     };
   })();
@@ -231,6 +233,14 @@ void main() {
     }
     const onMove = (e) => setTarget(e.clientX, e.clientY);
     if (!IS_TOUCH) window.addEventListener('mousemove', onMove);
+
+    // Hold the background still while anything on the page scrolls (capture
+    // catches scrollable elements too, e.g. the projects board), so scrolling
+    // gets the GPU to itself; the glow picks up again just after.
+    let holdUntil = 0;
+    const onScrollish = () => { holdUntil = performance.now() + 200; };
+    window.addEventListener('scroll', onScrollish, { capture: true, passive: true });
+    window.addEventListener('wheel', onScrollish, { passive: true });
     // touch listeners are deliberately NOT attached on touch devices: dragging
     // to scroll would otherwise drive the torch and force constant redraws
 
@@ -270,22 +280,27 @@ void main() {
 
     let lastDraw = -Infinity, lastBg = -1;
 
-    // Watchdog: average the gap between animation frames over ~2s windows. A
-    // healthy page gets a frame every ~7-17ms whatever our own fps cap is; if
-    // the whole page has dropped under ~36fps, step the background down a tier.
-    let watchFrom = Infinity, lastT = 0, gapSum = 0, gapN = 0;
+    // Watchdog: over ~2s windows, compare the average gap between animation
+    // frames with the browser's own cadence (the shortest gap seen). Frames
+    // arriving unevenly late means the page can't keep up, so step the
+    // background down a tier. A steady cadence is left alone even if slow:
+    // battery/energy-saver modes cap every page at an even 30fps, and dropping
+    // quality there only makes the site look worse without making it smoother.
+    let watchFrom = Infinity, lastT = 0, gapSum = 0, gapN = 0, gapMin = Infinity;
     function watch(t) {
       const gap = t - lastT;
       lastT = t;
       if (t < watchFrom || gap > 250) return;   // start-up, or a one-off stall / tab switch
       gapSum += gap; gapN++;
+      if (gap > 4) gapMin = Math.min(gapMin, gap);
       if (gapSum < 2000) return;
-      if (gapSum / gapN > 28 && tierIdx < TIERS.length - 1) {
+      const avg = gapSum / gapN;
+      if (avg > gapMin * 1.4 && avg > 20 && tierIdx < TIERS.length - 1) {
         tierIdx++;
         applyTier();
         watchFrom = t + 1000;                   // let the new tier settle before re-judging
       }
-      gapSum = 0; gapN = 0;
+      gapSum = 0; gapN = 0; gapMin = Infinity;
     }
 
     function frame(t) {
@@ -293,6 +308,7 @@ void main() {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;          // pause GPU work when tab/page not visible
       watch(t);
+      if (t < holdUntil) return;            // page is scrolling — keep the last frame
       if (t - lastDraw < minDelta) return;  // cap frame rate for low-end smoothness
 
       const drifting = !interacting && tier.drift && START.drift > 0;
@@ -324,6 +340,8 @@ void main() {
       cancelAnimationFrame(raf);
       clearTimeout(idleTimer);
       window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('scroll', onScrollish, { capture: true });
+      window.removeEventListener('wheel', onScrollish);
       window.removeEventListener('resize', resize);
     };
   };

@@ -96,68 +96,34 @@ function DepthCloud() {
 }
 
 // ---------------------------------------------------------------- custom cursor (+)
+// The "+" is a real (hardware) cursor image rather than a div chasing
+// mousemove. A div can only move when the page paints a frame, so it always
+// trailed the pointer, and badly whenever frames were slow (e.g. laptops on
+// battery capped at 30fps). The OS draws this one, so it never lags.
+// A faint dark halo keeps it visible over light images now that the old
+// mix-blend "difference" trick isn't available to a cursor image.
+const plusCursor = (arm, opacity) => {
+  const d = `M${8 - arm} 8h${arm * 2}M8 ${8 - arm}v${arm * 2}`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'>` +
+    `<path d='${d}' stroke='#000' stroke-opacity='.3' stroke-width='3.5'/>` +
+    `<path d='${d}' stroke='#fff' stroke-opacity='${opacity}' stroke-width='1.5'/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 8 8`;
+};
+const CURSOR_CSS =
+  `* { cursor: ${plusCursor(8, 0.8)}, crosshair !important; }\n` +
+  // links/buttons: the smaller, brighter "+" (was the scale(0.5) hover state)
+  `a, a *, button, button *, [data-clickable], [data-clickable] * { cursor: ${plusCursor(4, 1)}, pointer !important; }`;
+
 function CustomCursor({ enabled = true }) {
-  const ref = usePRef(null);
-  // Touch devices have no pointer to follow — mounting this only costs work.
-  const isTouch = typeof window !== 'undefined' &&
-    (window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0);
   usePEffect(() => {
-    if (isTouch) return;
-    if (!enabled) return;
-    const el = ref.current;
-    if (!el) return;
-    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-
-    if (coarse) {
-      // Touch devices: the crosshair only appears while a finger is down,
-      // right at the touch point — no OS-cursor swap needed.
-      el.style.opacity = '0';
-      const onTouchMove = (e) => {
-        const t = e.touches && e.touches[0];
-        if (!t) return;
-        el.style.transform = `translate(${t.clientX}px, ${t.clientY}px) translate(-50%, -50%)`;
-        el.style.opacity = '0.65';
-      };
-      const onTouchEnd = () => { el.style.opacity = '0'; };
-      window.addEventListener('touchstart', onTouchMove, { passive: true });
-      window.addEventListener('touchmove', onTouchMove, { passive: true });
-      window.addEventListener('touchend', onTouchEnd, { passive: true });
-      window.addEventListener('touchcancel', onTouchEnd, { passive: true });
-      return () => {
-        window.removeEventListener('touchstart', onTouchMove);
-        window.removeEventListener('touchmove', onTouchMove);
-        window.removeEventListener('touchend', onTouchEnd);
-        window.removeEventListener('touchcancel', onTouchEnd);
-      };
-    }
-
+    // touch devices have no pointer to show
+    if (!enabled || window.matchMedia('(hover: none)').matches) return;
     const styleEl = document.createElement('style');
-    styleEl.textContent = '* { cursor: none !important; }';
+    styleEl.textContent = CURSOR_CSS;
     document.head.appendChild(styleEl);
-    const onMove = (e) => {
-      const t = e.target;
-      const interactive = t && typeof t.closest === 'function' && t.closest('a, button, [data-clickable]');
-      el.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -50%) scale(${interactive ? 0.5 : 1})`;
-      el.style.opacity = interactive ? '1' : '0.65';
-    };
-    window.addEventListener('mousemove', onMove);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      styleEl.remove();
-    };
+    return () => styleEl.remove();
   }, [enabled]);
-
-  if (!enabled || isTouch) return null;
-  return (
-    <div ref={ref} style={{
-      position: 'fixed', top: 0, left: 0, width: 16, height: 16,
-      pointerEvents: 'none', zIndex: 9999, mixBlendMode: 'difference',
-      opacity: 0.65, willChange: 'transform',
-    }}>
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1.5, background: 'white', transform: 'translateY(-50%)' }} />
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1.5, background: 'white', transform: 'translateX(-50%)' }} />
-    </div>);
-
+  return null;
 }
 
 // ---------------------------------------------- live "current location" signifier
