@@ -12,6 +12,35 @@ const SB = (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase)
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
+// layout.js carries index-based order permutations (Index column order and
+// per-project gallery order) that the live site applied ON TOP of the content,
+// so reordering in the CMS came out scrambled. Fold them into the data once so
+// the editor shows what visitors actually see; the saved doc is then flagged
+// `ordersBaked` and the site stops applying them.
+function bakeLegacyOrders(c) {
+  const B = window.BAKED_LAYOUT || {};
+  const perm = (key, arr) => {
+    try {
+      const s = JSON.parse(B[key]);
+      const valid = Array.isArray(s) && s.length === arr.length && new Set(s).size === arr.length
+        && s.every((i) => Number.isInteger(i) && i >= 0 && i < arr.length);
+      if (valid) return s.map((i) => arr[i]);
+    } catch (_) {}
+    return arr;
+  };
+  const projects = perm('index-project-order-v1', c.projects || [])
+    .map((p) => ({ ...p, gallery: perm('gallery-order-' + p.id, p.gallery || []) }));
+  return { ...c, projects };
+}
+
+const friendlySaveError = (msg) => {
+  if (/row-level security|permission denied|JWT|not authorized|401|403/i.test(msg || '')) {
+    return 'Not allowed to save — your login may have expired. Log out, sign in again, then save.';
+  }
+  if (/Failed to fetch|NetworkError|network/i.test(msg || '')) return 'Network error — check your connection and try again.';
+  return msg || 'Unknown error';
+};
+
 // thumbnail-size presets offered when adding a new project ("layout")
 const LAYOUT_PRESETS = {
   portrait:  { w: 220, h: 300, label: 'Portrait' },
@@ -52,7 +81,7 @@ function Login({ onOk }) {
 function App() {
   const [authed, setAuthed] = useMState(false);
   const [authReady, setAuthReady] = useMState(!SB);
-  const [content, setContent] = useMState(() => clone(window.SITE_CONTENT));
+  const [content, setContent] = useMState(() => bakeLegacyOrders(clone(window.SITE_CONTENT)));
   const [positions, setPositions] = useMState(() => {
     // start from baked diagram positions, fill any missing from defaults
     let baked = {};
@@ -70,33 +99,90 @@ function App() {
   const [tab, setTab] = useMState('site');
   const [selId, setSelId] = useMState(null);
   const [busy, setBusy] = useMState(false);
+  // 'loading' | 'ok' | 'error' — whether the LIVE content was loaded. Editing on
+  // top of the bundled fallback and saving would overwrite the live site.
+  const [loadState, setLoadState] = useMState(SB ? 'loading' : 'ok');
+  const [loadErr, setLoadErr] = useMState('');
+  const [status, setStatus] = useMState(null); // { kind: 'ok' | 'err', text }
+  const savedSnap = useMRef(null); // JSON of the last loaded/saved state
 
-  // Check existing Supabase session, and load the LIVE published content so the
-  // editor starts from what's currently on the site (not just the bundle).
-  useMEffect(() => {
+  const snapOf = (c, pos, ent) => JSON.stringify({ c, pos, ent });
+
+  // Load the LIVE published content so the editor starts from what's
+  // currently on the site (not just the bundle).
+  const loadLive = () => {
     if (!SB) return;
+    setLoadState('loading'); setLoadErr('');
+    SB.from('content').select('data').eq('id', 1).single().then((res) => {
+      if (res.error) throw new Error(res.error.message);
+      return (res.data && res.data.data) || {};
+    }).catch(() =>
+      // A stale stored login makes even this public read fail — retry anonymously.
+      fetch(window.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data', {
+        headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY },
+        cache: 'no-store',
+      }).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then((rows) => (rows && rows[0] && rows[0].data) || {})
+    ).then((d) => {
+      let pos = positions, ent = entityPos;
+      let c = (d.location || d.bio || d.projects)
+        ? { location: d.location || {}, bio: d.bio || {}, projects: Array.isArray(d.projects) ? d.projects : [] }
+        : clone(window.SITE_CONTENT);
+      if (!d.ordersBaked) c = bakeLegacyOrders(c);
+      if (d.positions) pos = { ...positions, ...d.positions };
+      if ('entityPos' in d) ent = d.entityPos;
+      setContent(c); setPositions(pos); setEntityPos(ent);
+      savedSnap.current = snapOf(c, pos, ent);
+      setLoadState('ok');
+    }).catch((e) => {
+      setLoadErr((e && e.message) || 'Unknown error');
+      setLoadState('error');
+    });
+  };
+
+  // Check existing Supabase session + load live content.
+  useMEffect(() => {
+    if (!SB) { savedSnap.current = snapOf(content, positions, entityPos); return; }
     SB.auth.getSession().then(({ data }) => {
       if (data && data.session) setAuthed(true);
       setAuthReady(true);
     });
     const { data: sub } = SB.auth.onAuthStateChange((_e, session) => setAuthed(!!session));
-    SB.from('content').select('data').eq('id', 1).single().then((res) => {
-      const d = res && res.data && res.data.data;
-      if (!d) return;
-      if (d.location || d.bio || d.projects) {
-        setContent({
-          location: d.location || {}, bio: d.bio || {},
-          projects: Array.isArray(d.projects) ? d.projects : [],
-        });
-      }
-      if (d.positions) setPositions((m) => ({ ...m, ...d.positions }));
-      if ('entityPos' in d) setEntityPos(d.entityPos);
-    });
+    loadLive();
     return () => { try { sub.subscription.unsubscribe(); } catch (_) {} };
   }, []);
 
+  const newImagePaths = Object.keys(imgMapRef.current).filter((path) =>
+    content.projects.some((p) => (p.gallery || []).some((g) => g.src === path))
+    || ((content.bio && content.bio.working) || []).some((w) => w.img === path));
+  const dirty = loadState === 'ok' && savedSnap.current != null
+    && (snapOf(content, positions, entityPos) !== savedSnap.current || newImagePaths.length > 0);
+
+  // Warn before leaving with unsaved edits; Ctrl/Cmd+S saves.
+  const publishRef = useMRef(null);
+  useMEffect(() => {
+    const onBefore = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (publishRef.current) publishRef.current();
+      }
+    };
+    window.addEventListener('beforeunload', onBefore);
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('beforeunload', onBefore); window.removeEventListener('keydown', onKey); };
+  }, [dirty]);
+
+  // auto-hide the success message
+  useMEffect(() => {
+    if (!status || status.kind !== 'ok') return;
+    const t = setTimeout(() => setStatus(null), 4000);
+    return () => clearTimeout(t);
+  }, [status]);
+
   if (SB && !authReady) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>Loading…</div>;
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
+  if (loadState === 'loading') return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>Loading live content…</div>;
 
   const projects = content.projects;
   const patchProject = (id, patch) => setContent((c) => ({ ...c, projects: c.projects.map((p) => p.id === id ? { ...p, ...patch } : p) }));
@@ -131,7 +217,7 @@ function App() {
   };
 
   const deleteProject = (id) => {
-    if (!confirm('Delete this project? This cannot be undone (until you re-export).')) return;
+    if (!confirm('Delete this project? It disappears from the live site when you save.')) return;
     setContent((c) => ({ ...c, projects: c.projects.filter((p) => p.id !== id) }));
     setSelId(null);
   };
@@ -140,56 +226,80 @@ function App() {
   // Upload any new image Files to storage, swap their temp srcs for public URLs,
   // then upsert the whole content doc (incl. diagram positions) into one row.
   const publish = async () => {
-    if (!SB) { alert('Supabase not configured — fill in supabase-config.js'); return; }
-    setBusy(true);
+    if (busy) return;
+    if (!SB) { setStatus({ kind: 'err', text: 'Supabase not configured — fill in supabase-config.js' }); return; }
+    if (loadState !== 'ok' && !confirm(
+      "The live content never loaded, so you're editing the older bundled copy.\n\n" +
+      'Saving will REPLACE everything on the live site with what is shown here. Continue?')) return;
+    setBusy(true); setStatus(null);
     try {
+      const { data: sess } = await SB.auth.getSession();
+      if (!sess || !sess.session) throw new Error('JWT: no session');
+
       const map = imgMapRef.current;
       const replace = {};
-      const usedPath = (path) => projects.some((p) => (p.gallery || []).some((g) => g.src === path))
-        || (content.bio.working || []).some((w) => w.img === path);
-      for (const path of Object.keys(map)) {
-        if (!map[path].file || !usedPath(path)) continue;
+      for (const path of newImagePaths) {
+        if (!map[path] || !map[path].file) continue;
         const key = path.replace(/^images\//, '');
         const up = await SB.storage.from('images').upload(key, map[path].file, { upsert: true, contentType: map[path].file.type || undefined });
         if (up.error) throw new Error('Image upload failed: ' + up.error.message);
         const { data: pub } = SB.storage.from('images').getPublicUrl(key);
         replace[path] = pub.publicUrl;
       }
-      // deep clone + swap temp srcs for public URLs
-      const out = clone(content);
-      (out.projects || []).forEach((p) => (p.gallery || []).forEach((g) => { if (replace[g.src]) g.src = replace[g.src]; }));
-      (out.bio && out.bio.working || []).forEach((w) => { if (replace[w.img]) w.img = replace[w.img]; });
+      const swap = (c) => {
+        const out = clone(c);
+        (out.projects || []).forEach((p) => (p.gallery || []).forEach((g) => { if (replace[g.src]) g.src = replace[g.src]; }));
+        ((out.bio && out.bio.working) || []).forEach((w) => { if (replace[w.img]) w.img = replace[w.img]; });
+        return out;
+      };
+      const out = swap(content);
       const posObj = {};
       projects.forEach((p, i) => { posObj[p.id] = positions[p.id] || window.defaultPosFor(i); });
 
-      const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj, entityPos: entityPos };
-      const { error } = await SB.from('content').upsert({ id: 1, data: doc, updated_at: new Date().toISOString() });
+      const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj, entityPos: entityPos, ordersBaked: true };
+      // .select() makes the write report back, so a silently-blocked write (0 rows) is caught
+      const { data: row, error } = await SB.from('content')
+        .upsert({ id: 1, data: doc, updated_at: new Date().toISOString() })
+        .select('updated_at').single();
       if (error) throw new Error(error.message);
+      if (!row) throw new Error('permission denied: nothing was written');
 
-      // point local state at the uploaded URLs so re-saving won't re-upload
-      setContent(out);
+      // Point local state at the uploaded URLs so re-saving won't re-upload.
+      // Functional update keeps any edits made while the upload was running.
+      setContent((c) => swap(c));
       Object.keys(replace).forEach((path) => { delete map[path]; });
-      setBusy(false);
-      alert('Saved ✓  Your changes are live — refresh the site to see them.');
+      savedSnap.current = snapOf(out, positions, entityPos);
+      setLoadState('ok');
+      setStatus({ kind: 'ok', text: 'Saved — live now. Refresh the site to see it.' });
     } catch (e) {
+      setStatus({ kind: 'err', text: 'Save failed: ' + friendlySaveError(e && e.message) });
+    } finally {
       setBusy(false);
-      alert('Save failed: ' + e.message);
     }
   };
+  publishRef.current = publish;
 
-  const newImageCount = Object.keys(imgMapRef.current).filter((path) =>
-    projects.some((p) => (p.gallery || []).some((g) => g.src === path)) || (content.bio.working || []).some((w) => w.img === path)
-  ).length;
+  const newImageCount = newImagePaths.length;
 
   const TABS = [['site', 'Site & Bio'], ['projects', 'Projects'], ['diagram', 'Diagram'], ['index', 'Index order'], ['publish', 'Publish']];
   const sel = projects.find((p) => p.id === selId);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header tab={tab} setTab={setTab} tabs={TABS} busy={busy}
+      <Header tab={tab} setTab={setTab} tabs={TABS} busy={busy} dirty={dirty}
         onSave={publish}
-        onLogout={async () => { if (SB) { try { await SB.auth.signOut(); } catch (_) {} } setAuthed(false); }} />
-      <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 80px' }}>
+        onLogout={async () => {
+          if (dirty && !confirm('You have unsaved changes. Log out anyway?')) return;
+          if (SB) { try { await SB.auth.signOut(); } catch (_) {} }
+          setAuthed(false);
+        }} />
+      {loadState === 'error' &&
+        <div className="ad-banner">
+          <span><b>Couldn't load the live content</b> ({loadErr}). You're looking at the older bundled copy — saving now would overwrite the live site.</span>
+          <button className="ad-btn ghost" onClick={() => { if (!dirty || confirm('Reload the live content? Edits made here will be discarded.')) loadLive(); }}>Retry</button>
+        </div>}
+      <SaveDock dirty={dirty} busy={busy} status={status} onSave={publish} onDismiss={() => setStatus(null)} />
+      <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 120px' }}>
 
         {tab === 'site' &&
           <div>
@@ -263,21 +373,45 @@ function App() {
   );
 }
 
-function Header({ tab, setTab, tabs, onLogout, onSave, busy }) {
+function Header({ tab, setTab, tabs, onLogout, onSave, busy, dirty }) {
   return (
-    <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(11,12,13,0.92)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--line2)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 28px', display: 'flex', alignItems: 'center', gap: 22, height: 56 }}>
+    <div className="ad-header">
+      <div className="ad-header-in">
         <span style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>CMS</span>
-        <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+        <div className="ad-tabs">
           {tabs.map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
-              style={{ background: tab === id ? 'var(--panel2)' : 'transparent', border: 'none', borderRadius: 8, padding: '7px 13px', cursor: 'pointer', color: tab === id ? '#fff' : 'var(--dim)', fontWeight: tab === id ? 600 : 400 }}>{label}</button>
+              style={{ background: tab === id ? 'var(--panel2)' : 'transparent', border: 'none', borderRadius: 8, padding: '7px 13px', cursor: 'pointer', whiteSpace: 'nowrap', color: tab === id ? '#fff' : 'var(--dim)', fontWeight: tab === id ? 600 : 400 }}>{label}</button>
           ))}
         </div>
-        <button className="ad-btn" disabled={busy} onClick={onSave} style={{ padding: '7px 16px' }}>{busy ? 'Saving…' : 'Save'}</button>
-        <a href="index.html" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none' }}>View site ↗</a>
-        <button onClick={onLogout} style={{ background: 'none', border: 'none', color: 'var(--dim)', fontSize: 12, cursor: 'pointer' }}>Log out</button>
+        <button className="ad-btn" disabled={busy} onClick={onSave} title="Save (Ctrl/⌘ + S)" style={{ padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+          {dirty && !busy && <span className="ad-dot" />}
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <a href="index.html" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>View site ↗</a>
+        <button onClick={onLogout} style={{ background: 'none', border: 'none', color: 'var(--dim)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>Log out</button>
       </div>
+    </div>
+  );
+}
+
+// Floating save bar: slides up while there are unsaved edits, and reports the
+// result of the last save. Always reachable, whatever tab or scroll position.
+function SaveDock({ dirty, busy, status, onSave, onDismiss }) {
+  const show = dirty || busy || !!status;
+  const err = status && status.kind === 'err';
+  let text = 'Unsaved changes';
+  if (busy) text = 'Saving — uploading files and publishing…';
+  else if (status) text = status.text;
+  return (
+    <div className={'ad-dock' + (show ? ' on' : '') + (err ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
+      <span className="ad-dock-light" />
+      <span className="ad-dock-text">{text}</span>
+      {(dirty || err) &&
+        <button className="ad-btn" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : err ? 'Try again' : 'Save changes'}</button>}
+      {status && !busy &&
+        <button className="ad-dock-x" onClick={onDismiss} aria-label="Dismiss">✕</button>}
+      {!status && !busy && <span className="ad-dock-kbd">Ctrl/⌘ S</span>}
     </div>
   );
 }

@@ -2,8 +2,21 @@
 // If Supabase is configured, load the single content row and apply it over the
 // bundled content.js (which stays as an offline fallback). Always dispatches
 // 'remote-content-ready' so the app boot never hangs.
+//
+// Uses a plain REST fetch fired the moment this script runs. (supabase-js held
+// the request back until its auth bootstrap finished, which queued behind the
+// in-browser Babel compile — on slower phones that blew the 6s budget and the
+// site booted from the stale bundle, so CMS saves looked like they never
+// happened.) The last good copy is cached so a slow network still gets
+// recent content instead of the bundle.
 
 (function () {
+  var CACHE_KEY = 'remote-content-cache-v1';
+  // Index-based order permutations from layout.js. Once the CMS has saved
+  // ordering into the content itself (data.ordersBaked), these would scramble
+  // it, so they are dropped.
+  var ORDER_KEY_RE = /^(index-project-order-v1|gallery-order-)/;
+
   function apply(data) {
     if (!data || typeof data !== 'object') return;
     if (data.location || data.bio || data.projects) {
@@ -28,6 +41,17 @@
       window.BAKED_LAYOUT['large-entity-pos-v1'] = JSON.stringify(data.entityPos);
       try { localStorage.removeItem('large-entity-pos-v1'); } catch (_) {}
     }
+    if (data.ordersBaked) {
+      Object.keys(window.BAKED_LAYOUT).forEach(function (k) {
+        if (ORDER_KEY_RE.test(k)) delete window.BAKED_LAYOUT[k];
+      });
+      try {
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var k = localStorage.key(i);
+          if (k && ORDER_KEY_RE.test(k)) localStorage.removeItem(k);
+        }
+      } catch (_) {}
+    }
   }
 
   function done() {
@@ -35,25 +59,34 @@
     try { window.dispatchEvent(new Event('remote-content-ready')); } catch (_) {}
   }
 
+  function cached() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch (_) { return null; }
+  }
+
   var url = window.SUPABASE_URL, key = window.SUPABASE_ANON_KEY;
-  if (!url || !key || !window.supabase) { done(); return; }
+  if (!url || !key || !window.fetch) { done(); return; }
+
+  var settled = false;
+  function finish(data) {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (data) apply(data);
+    done();
+  }
 
   // safety: never let a slow network block the site for more than 6s
-  var timed = false;
-  var timer = setTimeout(function () { timed = true; done(); }, 6000);
+  var timer = setTimeout(function () { finish(cached()); }, 6000);
 
-  try {
-    var client = window.supabase.createClient(url, key);
-    window.__sbClient = client;
-    client.from('content').select('data').eq('id', 1).single()
-      .then(function (res) {
-        if (timed) return;
-        clearTimeout(timer);
-        if (res && res.data && res.data.data) apply(res.data.data);
-        done();
-      })
-      .catch(function () { if (!timed) { clearTimeout(timer); done(); } });
-  } catch (e) {
-    if (!timed) { clearTimeout(timer); done(); }
-  }
+  fetch(url.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data', {
+    headers: { apikey: key, Authorization: 'Bearer ' + key, Accept: 'application/json' },
+    cache: 'no-store',
+  })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (rows) {
+      var data = rows && rows[0] && rows[0].data;
+      if (data) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) {} }
+      finish(data || null);
+    })
+    .catch(function () { finish(cached()); });
 })();

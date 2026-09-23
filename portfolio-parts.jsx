@@ -16,6 +16,8 @@ function useMobile() {
 }
 
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+// BluuNext (Velvetyne, OFL) — name + project titles. Files in assets/fonts/bluunext.
+const DISPLAY_FONT = "'BluuNext', Georgia, serif";
 
 // Wheel delta in pixels. Some browsers/mice (notably Firefox) report deltaY in
 // lines (deltaMode 1) or pages (2), e.g. 3 per notch, which would otherwise
@@ -256,7 +258,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
       padding: '22px 24px', zIndex: 25,
     }}>
       <BubbleNav />
-      <div style={{ fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.15, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
+      <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.1, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
       <div style={{ ...italic, marginBottom: 16 }}>{bio.role || 'Designer/Artist'}</div>
 
       <div style={{ ...italic, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{bio.statement || ''}</div>
@@ -336,7 +338,7 @@ function BioShort({ locationStyle, top = 19, mobile = false, contact = true }) {
       padding: '22px 24px', zIndex: 25,
     }}>
       <BubbleNav />
-      <div style={{ fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.15, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
+      <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 'var(--name-size, 12px)', lineHeight: 1.1, letterSpacing: 'var(--name-track, 0)' }}>{bio.name || 'Jaxon Stickler'}</div>
       <div>{bio.role || 'Designer/Artist'}</div>
       <div style={{ height: 16 }} />
       <div><LocationSignifier style={locationStyle} /></div>

@@ -137,7 +137,7 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
       padding: '22px 24px', fontFamily: FONT, color: '#fff',
       fontSize: 12, lineHeight: 1.5, zIndex: 24,
     }}>
-      <div style={{ fontWeight: 600, letterSpacing: '0.04em' }}>{p.title}</div>
+      <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 15, lineHeight: 1.2, letterSpacing: '0.02em' }}>{p.title}</div>
       <div>{p.year}</div>
       {p.medium && (
         <div style={{ opacity: 0.7, marginTop: 12 }}>[{p.medium}]</div>

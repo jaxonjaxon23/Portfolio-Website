@@ -11,7 +11,7 @@ function TitleCard({ p }) {
       padding: '12px 14px', marginBottom: 10, background: '#000',
       fontFamily: FONT, color: '#fff', fontSize: 12, lineHeight: 1.45,
     }}>
-      <div style={{ fontWeight: 600, letterSpacing: '0.03em' }}>{p.title}</div>
+      <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 14, lineHeight: 1.2, letterSpacing: '0.02em' }}>{p.title}</div>
       <div style={{ opacity: 0.62, marginTop: 2 }}>{p.year}</div>
       {p.collab && (
         <div style={{ opacity: 0.55, marginTop: 3, fontSize: 11 }}>{p.collab}</div>
@@ -285,6 +285,48 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
       stop();
     };
   }, []);
+
+  // Mobile: the bio card fills the first screen, so on a visitor's first visit
+  // slide the board right to reveal a project, then back — shows it scrolls.
+  useIEffect(() => {
+    if (!isMobile) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    try {
+      if (localStorage.getItem('swipe-nudge-seen')) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    } catch (_) {}
+    const timers = [];
+    let obs = null, cancelled = false;
+    const cancel = () => { cancelled = true; };
+    el.addEventListener('touchstart', cancel, { passive: true, once: true });
+    const onVisible = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', onVisible); nudge(); } };
+    const nudge = () => {
+      // opened in a background tab: hold the nudge until someone can see it
+      if (document.visibilityState !== 'visible') { document.addEventListener('visibilitychange', onVisible); return; }
+      timers.push(setTimeout(() => {
+        if (cancelled || el.scrollLeft > 0) return;
+        try { localStorage.setItem('swipe-nudge-seen', '1'); } catch (_) {}
+        el.scrollTo({ left: 72, behavior: 'smooth' });
+        timers.push(setTimeout(() => { if (!cancelled) el.scrollTo({ left: 0, behavior: 'smooth' }); }, 750));
+      }, 500));
+    };
+    // wait for the preloader to fade so the nudge is actually seen
+    const pre = document.getElementById('preloader');
+    if (!pre || pre.classList.contains('hidden')) nudge();
+    else {
+      obs = new MutationObserver(() => {
+        if (pre.classList.contains('hidden')) { obs.disconnect(); obs = null; nudge(); }
+      });
+      obs.observe(pre, { attributes: true, attributeFilter: ['class'] });
+    }
+    return () => {
+      timers.forEach(clearTimeout);
+      if (obs) obs.disconnect();
+      el.removeEventListener('touchstart', cancel);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isMobile]);
 
   return (
     // Mobile: horizontal only, as originally designed. Desktop: overflowY auto

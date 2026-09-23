@@ -6,8 +6,13 @@
 <title>Jaxon Stickler — Portfolio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<link rel="preload" href="assets/fonts/bluunext/bluunext-bold-webfont.woff2" as="font" type="font/woff2" crossorigin />
 <style>
+  /* BluuNext by Jean-Baptiste Morizot / Velvetyne — SIL OFL 1.1 (assets/fonts/bluunext/OFL_BluuNext.txt) */
+  @font-face { font-family: 'BluuNext'; src: url('assets/fonts/bluunext/bluunext-bold-webfont.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'BluuNext'; src: url('assets/fonts/bluunext/bluunext-bolditalic-webfont.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+  @font-face { font-family: 'BluuNext Titling'; src: url('assets/fonts/bluunext/bluunext-titling.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { background: var(--bg-color, #0b0c0d); }
   body { background: transparent; color: #fff; -webkit-font-smoothing: antialiased; }
@@ -62,7 +67,6 @@
     color: rgba(255,255,255,0.55); text-transform: uppercase;
   }
 </style>
-<link id="gfont-Inter" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap">
 </head>
 <body style="font-family: Inter; font-size: 14px">
 <div id="root"></div>
@@ -80,7 +84,6 @@
 <script src="content.js"></script>
 <script src="projects.js"></script>
 <script src="supabase-config.js"></script>
-<script src="https://unpkg.com/@supabase/supabase-js@2.45.0/dist/umd/supabase.js"></script>
 <script src="remote-content.js"></script>
 <script src="depth-cloud.js"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>

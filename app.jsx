@@ -178,7 +178,7 @@ function App() {
   useEffect(() => {
     const NAME = {
       small:  ['12px', '0'],
-      medium: ['17px', '-0.01em'],
+      medium: ['21px', '-0.005em'],
       large:  ['23px', '-0.02em'],
       xlarge: ['30px', '-0.03em'],
     };
