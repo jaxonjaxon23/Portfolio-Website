@@ -151,6 +151,11 @@ function LayoutExport() {
   );
 }
 
+// Theme toggle cycles these. 'alarm' = hypersaturated orange wash (index.html).
+const THEMES = ['dark', 'light', 'alarm'];
+const THEME_LABEL = { dark: 'Dark', light: 'Light', alarm: 'Alarm' };
+const THEME_ICON = { dark: '◑', light: '◐', alarm: '●' };
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const isMobile = useMobile();
@@ -158,13 +163,17 @@ function App() {
   const [hovered, setHovered] = useState(null);
   const bioRef = useRef(null);
   const [readoutTop, setReadoutTop] = useState(500);
-  const [light, setLight] = useState(() => localStorage.getItem('theme') === 'light');
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return THEMES.includes(saved) ? saved : 'dark';
+  });
 
   // Light mode: invert the whole page (CSS handles keeping media true-colour).
   useEffect(() => {
-    document.documentElement.classList.toggle('light-mode', light);
-    localStorage.setItem('theme', light ? 'light' : 'dark');
-  }, [light]);
+    document.documentElement.classList.toggle('light-mode', theme === 'light');
+    document.documentElement.classList.toggle('alarm-mode', theme === 'alarm');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   // Large entity nudge (offset from its bubble-anchored home).
   useEffect(() => {
@@ -231,6 +240,13 @@ function App() {
   window.PROJECTS.find((p) => p.id === view) : null;
   const isIndex = view === 'index';
   const isAbout = !project && !isIndex;
+
+  // Project pages: the gallery covers the background, so freeze the depth
+  // cloud on its last frame instead of redrawing it every frame.
+  const onProject = !!project;
+  useEffect(() => {
+    if (window.setDepthCloudFrozen) window.setDepthCloudFrozen(onProject);
+  }, [onProject]);
 
   let footerLeft = [];
 
@@ -305,9 +321,9 @@ function App() {
 
       <Footer left={footerLeft} navPosition={t.navPosition} />
 
-      <button id="theme-toggle" title="Toggle light / dark"
-      aria-label="Toggle light or dark mode"
-      onClick={() => setLight((v) => !v)}><span aria-hidden="true">{light ? '◐' : '◑'}</span>{light ? 'Light' : 'Dark'}</button>
+      <button id="theme-toggle" title="Switch theme: dark / light / alarm"
+      aria-label={'Theme: ' + THEME_LABEL[theme] + '. Switch theme'}
+      onClick={() => setTheme((v) => THEMES[(THEMES.indexOf(v) + 1) % THEMES.length])}><span aria-hidden="true">{THEME_ICON[theme]}</span>{THEME_LABEL[theme]}</button>
 
       <TweaksPanel>
         <TweakSection label="Authoring" />

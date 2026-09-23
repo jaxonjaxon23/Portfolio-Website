@@ -39,6 +39,18 @@
     transition: transform .25s ease, background .2s ease, border-color .2s ease;
   }
   #theme-toggle:hover { background: rgba(255,255,255,0.14); transform: scale(1.05); }
+  /* ---- alarm mode: hypersaturated orange BACKGROUND ----
+     The layers sit at z-index -1 after #root, i.e. just above the depth-cloud
+     canvas (also -1) and below all content, so only the background is recoloured.
+     .hue recolours it to the orange hue while keeping its brightness;
+     .lift then screens blacks up to a deep red-orange so nothing stays black.
+     Two separate fixed layers (not one wrapper) so each blends with the page. */
+  .alarm-layer { display: none; position: fixed; inset: 0; pointer-events: none; z-index: -1; }
+  html.alarm-mode .alarm-layer { display: block; }
+  .alarm-layer.hue  { background: #ff4a00; mix-blend-mode: color; }
+  .alarm-layer.lift { background: #b82400; mix-blend-mode: screen; }
+  /* the index board's dark film would mute the orange — thin it in alarm mode */
+  html.alarm-mode { --board-bg: rgba(40, 4, 0, 0.12); }
   @keyframes locPulseRing {
     0%   { transform: scale(1); opacity: 0.7; }
     70%  { transform: scale(3.4); opacity: 0; }
@@ -70,6 +82,8 @@
 </head>
 <body style="font-family: Inter; font-size: 14px">
 <div id="root"></div>
+<div class="alarm-layer hue" aria-hidden="true"></div>
+<div class="alarm-layer lift" aria-hidden="true"></div>
 <div id="preloader">
   <div class="pl-track"><div class="pl-fill" id="pl-fill"></div></div>
   <div class="pl-pct" id="pl-pct">0%</div>

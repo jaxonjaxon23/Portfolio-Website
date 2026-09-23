@@ -132,6 +132,14 @@ void main() {
     };
   })();
 
+  // Frozen = hold the last drawn frame and do no GPU work at all. Used behind
+  // project pages, where the gallery covers the background anyway.
+  let frozen = false, wake = null;
+  window.setDepthCloudFrozen = function (f) {
+    frozen = !!f;
+    if (!frozen && wake) wake();
+  };
+
   window.initDepthCloud = function initDepthCloud(canvas) {
     const attrs = {
       antialias: false, alpha: false, preserveDrawingBuffer: false,
@@ -270,7 +278,7 @@ void main() {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       applyTier();                        // sets the grid and sizes the canvas
-      window.addEventListener('resize', resize);
+      window.addEventListener('resize', onResize);
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       // let page start-up (script compile, image decode) finish before judging speed
@@ -279,6 +287,13 @@ void main() {
     })().catch((err) => console.error(err));
 
     let lastDraw = -Infinity, lastBg = -1;
+
+    wake = () => { if (alive && !raf) raf = requestAnimationFrame(frame); };
+    // resizing clears the canvas, so a frozen cloud needs one fresh frame
+    const onResize = () => {
+      resize();
+      if (frozen) { lastDraw = -Infinity; wake(); }
+    };
 
     // Watchdog: over ~2s windows, compare the average gap between animation
     // frames with the browser's own cadence (the shortest gap seen). Frames
@@ -305,6 +320,8 @@ void main() {
 
     function frame(t) {
       if (!alive) return;
+      // frozen: stop the loop once a frame is on screen (wake() restarts it)
+      if (frozen && lastDraw > -Infinity) { raf = 0; return; }
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;          // pause GPU work when tab/page not visible
       watch(t);
@@ -342,7 +359,8 @@ void main() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('scroll', onScrollish, { capture: true });
       window.removeEventListener('wheel', onScrollish);
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', onResize);
+      wake = null;
     };
   };
 })();
