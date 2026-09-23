@@ -34,18 +34,18 @@ const TZONES = [
 function Field({ label, children, hint }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      {label && <label className="ad-field-label">{label}</label>}
+      {label && <label className="cms-field-label">{label}</label>}
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--dim2)', marginTop: 5 }}>{hint}</div>}
     </div>
   );
 }
 function Text({ value, onChange, placeholder }) {
-  return <input className="ad-input" value={value || ''} placeholder={placeholder || ''}
+  return <input className="cms-input" value={value || ''} placeholder={placeholder || ''}
     onChange={(e) => onChange(e.target.value)} />;
 }
 function Area({ value, onChange, rows, placeholder }) {
-  return <textarea className="ad-textarea" value={value || ''} placeholder={placeholder || ''}
+  return <textarea className="cms-textarea" value={value || ''} placeholder={placeholder || ''}
     style={{ minHeight: (rows || 4) * 22 }} onChange={(e) => onChange(e.target.value)} />;
 }
 function Card({ children, style }) {
@@ -139,7 +139,7 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <label className="ad-field-label" style={{ margin: 0 }}>Gallery — first item is the index thumbnail</label>
+        <label className="cms-field-label" style={{ margin: 0 }}>Gallery — first item is the index thumbnail</label>
         <div style={{ display: 'flex', gap: 4, background: 'var(--panel2)', borderRadius: 8, padding: 3 }}>
           {[['arrange', 'Arrange'], ['preview', 'Page preview']].map(([m, lbl]) => (
             <button key={m} onClick={() => setMode(m)}
@@ -226,9 +226,9 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
 
       <ImageDrop onFiles={onAddImages} label="+ Add images or videos to this project" />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <input className="ad-input" placeholder="Paste a YouTube or Vimeo URL to embed" value={embedUrl}
+        <input className="cms-input" placeholder="Paste a YouTube or Vimeo URL to embed" value={embedUrl}
           onChange={(e) => setEmbedUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addEmbed()} />
-        <button className="ad-btn ghost" onClick={addEmbed}>Add embed</button>
+        <button className="cms-btn ghost" onClick={addEmbed}>Add embed</button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--dim2)', marginTop: 8 }}>
         Page preview shows each item at the width it appears on the site. Drag a slider to resize; ⚠ upscaled means the file's resolution is lower than its display size and will look pixelated.
@@ -250,14 +250,14 @@ function KeywordsEditor({ value, onChange }) {
     <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 8 }}>
         {list.map((k, i) => (
-          <span key={i} className="ad-chip">{k}<button onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button></span>
+          <span key={i} className="cms-chip">{k}<button onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button></span>
         ))}
         {list.length === 0 && <span style={{ color: 'var(--dim2)', fontSize: 12 }}>No keywords yet</span>}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <input className="ad-input" placeholder="Add a keyword" value={draft}
+        <input className="cms-input" placeholder="Add a keyword" value={draft}
           onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-        <button className="ad-btn ghost" onClick={add}>Add</button>
+        <button className="cms-btn ghost" onClick={add}>Add</button>
       </div>
     </div>
   );
@@ -282,7 +282,7 @@ function ProjectEditor({ project, imgMap, onPatch, onAddImages, onDelete }) {
         onChange={(g) => set('gallery', g)} />
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: 'var(--dim2)', fontSize: 12 }}>id: {project.id}</span>
-        <button className="ad-btn danger" onClick={onDelete}>Delete project</button>
+        <button className="cms-btn danger" onClick={onDelete}>Delete project</button>
       </div>
     </Card>
   );

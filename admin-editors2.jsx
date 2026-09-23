@@ -39,7 +39,7 @@ function LocationEditor({ location, onPatch }) {
         <Text value={location.city} onChange={(v) => onPatch({ city: v })} placeholder="Berlin" />
       </Field>
       <Field label="Timezone (drives the live clock)">
-        <select className="ad-select" value={location.tz} onChange={(e) => onPatch({ tz: e.target.value })}>
+        <select className="cms-select" value={location.tz} onChange={(e) => onPatch({ tz: e.target.value })}>
           {window.TZONES.map((z) => <option key={z} value={z}>{z}</option>)}
         </select>
       </Field>
@@ -66,19 +66,19 @@ function WorkingEditor({ items, imgMap, onChange, onAddImage }) {
               {it.img
                 ? <React.Fragment>
                     <Thumb src={it.img} imgMap={imgMap} style={{ width: 40, height: 40, borderRadius: 6 }} />
-                    <button className="ad-btn ghost" style={{ padding: '5px 10px' }} onClick={() => set(i, { img: '' })}>Remove hover image</button>
+                    <button className="cms-btn ghost" style={{ padding: '5px 10px' }} onClick={() => set(i, { img: '' })}>Remove hover image</button>
                   </React.Fragment>
-                : <label className="ad-btn ghost" style={{ padding: '5px 10px', cursor: 'pointer' }}>
+                : <label className="cms-btn ghost" style={{ padding: '5px 10px', cursor: 'pointer' }}>
                     Add hover image
                     <input type="file" accept="image/*" style={{ display: 'none' }}
                       onChange={(e) => { const f = e.target.files[0]; if (f) onAddImage(f, (path) => set(i, { img: path })); e.target.value = ''; }} />
                   </label>}
             </div>
           </div>
-          <button className="ad-btn danger" style={{ padding: '6px 10px' }} onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
+          <button className="cms-btn danger" style={{ padding: '6px 10px' }} onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
-      <button className="ad-btn ghost" onClick={() => onChange(list.concat([{ text: '', img: '' }]))}>+ Add “working on” item</button>
+      <button className="cms-btn ghost" onClick={() => onChange(list.concat([{ text: '', img: '' }]))}>+ Add “working on” item</button>
     </div>
   );
 }

@@ -11,7 +11,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   /* Tell the browser this UI is already dark. Without it, Edge/Chrome "force dark"
-     repaints the white .ad-btn to dark-on-dark, making Save look like it's missing. */
+     repaints the white .cms-btn to dark-on-dark, making Save look like it's missing. */
   :root { color-scheme: dark; }
   :root {
     --bg: #0b0c0d; --panel: #151619; --panel2: #1c1e22; --line: rgba(255,255,255,0.12);
@@ -27,46 +27,54 @@
   textarea { resize: vertical; }
   a { color: var(--accent); }
 
-  .ad-field-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; display: block; }
-  .ad-input, .ad-textarea, .ad-select {
+  /* Class prefix is "cms-", never "ad-": ad blockers hide elements whose class
+     looks like an advert (.ad-header, .ad-banner, .ad-btn…), which made the
+     header, tabs and Save button vanish for anyone running one. */
+  .cms-field-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; display: block; }
+  .cms-input, .cms-textarea, .cms-select {
     width: 100%; background: var(--panel2); border: 1px solid var(--line);
     border-radius: 8px; padding: 9px 11px; color: var(--txt); outline: none;
   }
-  .ad-input:focus, .ad-textarea:focus, .ad-select:focus { border-color: rgba(124,255,178,0.6); }
-  .ad-textarea { min-height: 90px; line-height: 1.55; }
-  .ad-btn {
+  .cms-input:focus, .cms-textarea:focus, .cms-select:focus { border-color: rgba(124,255,178,0.6); }
+  .cms-textarea { min-height: 90px; line-height: 1.55; }
+  .cms-btn {
     background: #fff; color: #000; border: 1px solid #fff; border-radius: 8px;
     padding: 9px 16px; font-weight: 600; cursor: pointer; letter-spacing: 0.02em;
     forced-color-adjust: none; -webkit-text-fill-color: #000;
   }
-  .ad-btn:hover { background: #e7e7e7; }
-  .ad-btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); -webkit-text-fill-color: var(--txt); }
-  .ad-btn.ghost:hover { background: rgba(255,255,255,0.06); }
-  .ad-btn.danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,107,107,0.4); -webkit-text-fill-color: var(--danger); }
-  .ad-btn.danger:hover { background: rgba(255,107,107,0.1); }
-  .ad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .ad-chip {
+  .cms-btn:hover { background: #e7e7e7; }
+  .cms-btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); -webkit-text-fill-color: var(--txt); }
+  .cms-btn.ghost:hover { background: rgba(255,255,255,0.06); }
+  .cms-btn.danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,107,107,0.4); -webkit-text-fill-color: var(--danger); }
+  .cms-btn.danger:hover { background: rgba(255,107,107,0.1); }
+  .cms-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cms-chip {
     display: inline-flex; align-items: center; gap: 6px; background: var(--panel2);
     border: 1px solid var(--line); border-radius: 20px; padding: 4px 10px; font-size: 12px;
   }
-  .ad-chip button { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 1; }
-  .ad-chip button:hover { color: var(--danger); }
+  .cms-chip button { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 1; }
+  .cms-chip button:hover { color: var(--danger); }
 
-  /* header: tabs scroll sideways on narrow screens so Save never gets pushed off */
-  .ad-header { position: sticky; top: 0; z-index: 10; background: rgba(11,12,13,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line2); }
-  .ad-header-in { max-width: 1080px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; gap: 18px; height: 56px; }
-  .ad-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .ad-tabs::-webkit-scrollbar { display: none; }
-  .ad-dot { width: 7px; height: 7px; border-radius: 50%; background: #ffb547; box-shadow: 0 0 0 3px rgba(255,181,71,0.25); }
+  /* header: one row on wide screens; below 900px the tabs drop to their own
+     full-width row and wrap, so every tab stays visible and Save stays on top */
+  .cms-header { position: sticky; top: 0; z-index: 10; background: rgba(11,12,13,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line2); }
+  .cms-header-in { max-width: 1080px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; gap: 18px; min-height: 56px; }
+  .cms-tabs { display: flex; gap: 4px; flex: 1; }
+  @media (max-width: 900px) {
+    .cms-header-in { flex-wrap: wrap; row-gap: 4px; padding-top: 10px; padding-bottom: 8px; }
+    .cms-header-in > .cms-btn { margin-left: auto; }
+    .cms-tabs { order: 10; flex: 1 0 100%; flex-wrap: wrap; }
+  }
+  .cms-dot { width: 7px; height: 7px; border-radius: 50%; background: #ffb547; box-shadow: 0 0 0 3px rgba(255,181,71,0.25); }
 
-  .ad-banner {
+  .cms-banner {
     max-width: 1080px; margin: 16px auto 0; width: calc(100% - 56px); display: flex; align-items: center; gap: 14px;
     padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,107,107,0.45); background: rgba(255,107,107,0.08); color: #ffd4d4;
   }
-  .ad-banner span { flex: 1; }
+  .cms-banner span { flex: 1; }
 
   /* floating save dock */
-  .ad-dock {
+  .cms-dock {
     position: fixed; left: 50%; bottom: 22px; z-index: 20; display: flex; align-items: center; gap: 14px;
     padding: 8px 8px 8px 16px; min-height: 52px; max-width: calc(100vw - 32px);
     background: rgba(28,30,34,0.96); backdrop-filter: blur(10px);
@@ -74,23 +82,23 @@
     transform: translate(-50%, calc(100% + 40px)); opacity: 0; pointer-events: none; visibility: hidden;
     transition: transform .32s cubic-bezier(.2,.9,.25,1.1), opacity .2s ease, visibility 0s linear .32s;
   }
-  .ad-dock.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; visibility: visible; transition-delay: 0s; }
-  .ad-dock-light { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #ffb547; box-shadow: 0 0 0 4px rgba(255,181,71,0.18); animation: adPulse 1.8s ease-in-out infinite; }
-  .ad-dock.ok .ad-dock-light { background: var(--accent); box-shadow: 0 0 0 4px rgba(124,255,178,0.18); animation: none; }
-  .ad-dock.err { border-color: rgba(255,107,107,0.5); }
-  .ad-dock.err .ad-dock-light { background: var(--danger); box-shadow: 0 0 0 4px rgba(255,107,107,0.2); animation: none; }
-  .ad-dock-text { font-size: 13px; }
-  .ad-dock .ad-btn { white-space: nowrap; flex-shrink: 0; }
-  .ad-dock.err .ad-dock-text { color: #ffd4d4; }
-  .ad-dock-kbd { font-size: 11px; color: var(--dim2); padding-right: 8px; white-space: nowrap; }
-  .ad-dock-x { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 13px; padding: 6px 8px; }
-  .ad-dock-x:hover { color: var(--txt); }
+  .cms-dock.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+  .cms-dock-light { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #ffb547; box-shadow: 0 0 0 4px rgba(255,181,71,0.18); animation: adPulse 1.8s ease-in-out infinite; }
+  .cms-dock.ok .cms-dock-light { background: var(--accent); box-shadow: 0 0 0 4px rgba(124,255,178,0.18); animation: none; }
+  .cms-dock.err { border-color: rgba(255,107,107,0.5); }
+  .cms-dock.err .cms-dock-light { background: var(--danger); box-shadow: 0 0 0 4px rgba(255,107,107,0.2); animation: none; }
+  .cms-dock-text { font-size: 13px; }
+  .cms-dock .cms-btn { white-space: nowrap; flex-shrink: 0; }
+  .cms-dock.err .cms-dock-text { color: #ffd4d4; }
+  .cms-dock-kbd { font-size: 11px; color: var(--dim2); padding-right: 8px; white-space: nowrap; }
+  .cms-dock-x { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 13px; padding: 6px 8px; }
+  .cms-dock-x:hover { color: var(--txt); }
   @keyframes adPulse { 50% { box-shadow: 0 0 0 7px rgba(255,181,71,0); } }
-  @media (prefers-reduced-motion: reduce) { .ad-dock { transition: none; } .ad-dock-light { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .cms-dock { transition: none; } .cms-dock-light { animation: none; } }
   @media (max-width: 640px) {
-    .ad-header-in { padding: 0 14px; gap: 10px; }
-    .ad-banner { width: calc(100% - 28px); flex-direction: column; align-items: stretch; }
-    .ad-dock-kbd { display: none; }
+    .cms-header-in { padding-left: 14px; padding-right: 14px; gap: 10px; }
+    .cms-banner { width: calc(100% - 28px); flex-direction: column; align-items: stretch; }
+    .cms-dock-kbd { display: none; }
   }
 </style>
 </head>

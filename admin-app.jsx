@@ -65,14 +65,14 @@ function Login({ onOk }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 320, textAlign: 'center' }}>
         <div style={{ fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 22 }}>Portfolio CMS</div>
-        <input className="ad-input" type="email" autoFocus placeholder="Email" value={email}
+        <input className="cms-input" type="email" autoFocus placeholder="Email" value={email}
           onChange={(e) => { setEmail(e.target.value); setErr(''); }} onKeyDown={(e) => e.key === 'Enter' && submit()}
           style={{ textAlign: 'center', marginBottom: 10 }} />
-        <input className="ad-input" type="password" placeholder="Password" value={pw}
+        <input className="cms-input" type="password" placeholder="Password" value={pw}
           onChange={(e) => { setPw(e.target.value); setErr(''); }} onKeyDown={(e) => e.key === 'Enter' && submit()}
           style={{ textAlign: 'center', borderColor: err ? 'var(--danger)' : undefined }} />
         {err && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{err}</div>}
-        <button className="ad-btn" disabled={busy} style={{ width: '100%', marginTop: 14 }} onClick={submit}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        <button className="cms-btn" disabled={busy} style={{ width: '100%', marginTop: 14 }} onClick={submit}>{busy ? 'Signing in…' : 'Sign in'}</button>
       </div>
     </div>
   );
@@ -294,9 +294,9 @@ function App() {
           setAuthed(false);
         }} />
       {loadState === 'error' &&
-        <div className="ad-banner">
+        <div className="cms-banner">
           <span><b>Couldn't load the live content</b> ({loadErr}). You're looking at the older bundled copy — saving now would overwrite the live site.</span>
-          <button className="ad-btn ghost" onClick={() => { if (!dirty || confirm('Reload the live content? Edits made here will be discarded.')) loadLive(); }}>Retry</button>
+          <button className="cms-btn ghost" onClick={() => { if (!dirty || confirm('Reload the live content? Edits made here will be discarded.')) loadLive(); }}>Retry</button>
         </div>}
       <SaveDock dirty={dirty} busy={busy} status={status} onSave={publish} onDismiss={() => setStatus(null)} />
       <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 120px' }}>
@@ -359,7 +359,7 @@ function App() {
                 <div><b>{projects.length}</b> projects</div>
                 <div><b>{newImageCount}</b> new image/video file(s) to upload this save</div>
               </div>
-              <button className="ad-btn" disabled={busy} onClick={publish}>{busy ? 'Saving…' : 'Save changes (publish live)'}</button>
+              <button className="cms-btn" disabled={busy} onClick={publish}>{busy ? 'Saving…' : 'Save changes (publish live)'}</button>
               <ol style={{ margin: '20px 0 0 18px', color: 'var(--dim)', lineHeight: 1.9, maxWidth: 640 }}>
                 <li>Click <b>Save</b> — new images upload to Supabase storage, then all content is saved.</li>
                 <li>Refresh the live site — your changes are already there.</li>
@@ -375,17 +375,17 @@ function App() {
 
 function Header({ tab, setTab, tabs, onLogout, onSave, busy, dirty }) {
   return (
-    <div className="ad-header">
-      <div className="ad-header-in">
+    <div className="cms-header">
+      <div className="cms-header-in">
         <span style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>CMS</span>
-        <div className="ad-tabs">
+        <div className="cms-tabs">
           {tabs.map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ background: tab === id ? 'var(--panel2)' : 'transparent', border: 'none', borderRadius: 8, padding: '7px 13px', cursor: 'pointer', whiteSpace: 'nowrap', color: tab === id ? '#fff' : 'var(--dim)', fontWeight: tab === id ? 600 : 400 }}>{label}</button>
           ))}
         </div>
-        <button className="ad-btn" disabled={busy} onClick={onSave} title="Save (Ctrl/⌘ + S)" style={{ padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-          {dirty && !busy && <span className="ad-dot" />}
+        <button className="cms-btn" disabled={busy} onClick={onSave} title="Save (Ctrl/⌘ + S)" style={{ padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+          {dirty && !busy && <span className="cms-dot" />}
           {busy ? 'Saving…' : 'Save'}
         </button>
         <a href="index.html" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>View site ↗</a>
@@ -404,14 +404,14 @@ function SaveDock({ dirty, busy, status, onSave, onDismiss }) {
   if (busy) text = 'Saving — uploading files and publishing…';
   else if (status) text = status.text;
   return (
-    <div className={'ad-dock' + (show ? ' on' : '') + (err ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
-      <span className="ad-dock-light" />
-      <span className="ad-dock-text">{text}</span>
+    <div className={'cms-dock' + (show ? ' on' : '') + (err ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
+      <span className="cms-dock-light" />
+      <span className="cms-dock-text">{text}</span>
       {(dirty || err) &&
-        <button className="ad-btn" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : err ? 'Try again' : 'Save changes'}</button>}
+        <button className="cms-btn" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : err ? 'Try again' : 'Save changes'}</button>}
       {status && !busy &&
-        <button className="ad-dock-x" onClick={onDismiss} aria-label="Dismiss">✕</button>}
-      {!status && !busy && <span className="ad-dock-kbd">Ctrl/⌘ S</span>}
+        <button className="cms-dock-x" onClick={onDismiss} aria-label="Dismiss">✕</button>}
+      {!status && !busy && <span className="cms-dock-kbd">Ctrl/⌘ S</span>}
     </div>
   );
 }
@@ -421,7 +421,7 @@ function AddProjectBar({ onAdd }) {
   const [title, setTitle] = useMState('');
   const [year, setYear] = useMState('');
   const [layout, setLayout] = useMState('portrait');
-  if (!open) return <button className="ad-btn ghost" onClick={() => setOpen(true)}>+ Add new project</button>;
+  if (!open) return <button className="cms-btn ghost" onClick={() => setOpen(true)}>+ Add new project</button>;
   return (
     <Card style={{ padding: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
@@ -440,8 +440,8 @@ function AddProjectBar({ onAdd }) {
         </div>
       </Field>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button className="ad-btn" onClick={() => { onAdd(title, year, layout); setOpen(false); setTitle(''); setYear(''); }}>Create</button>
-        <button className="ad-btn ghost" onClick={() => setOpen(false)}>Cancel</button>
+        <button className="cms-btn" onClick={() => { onAdd(title, year, layout); setOpen(false); setTitle(''); setYear(''); }}>Create</button>
+        <button className="cms-btn ghost" onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </Card>
   );
