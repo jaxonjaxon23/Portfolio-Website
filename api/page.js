@@ -85,10 +85,16 @@ function bioHtml(c, headingTag) {
   ].join('');
 }
 
+// year, then client and collaborators with their credit links
+function creditsHtml(p) {
+  return (p.year ? '<p>' + S.esc(p.year) + '</p>' : '') +
+    (S.plain(p.client) ? '<p>Client: ' + S.creditHtml(p.client, p) + '</p>' : '') +
+    (S.plain(p.collab) ? '<p>Collaborators: ' + S.creditHtml(p.collab, p) + '</p>' : '');
+}
+
 function projectSummaryHtml(p) {
-  const cr = S.credits(p);
   return '<article><h3><a href="/work/' + encodeURIComponent(p.id) + '">' + S.esc(S.titleCase(p.title)) + '</a></h3>' +
-    (cr.length ? '<p>' + S.esc(cr.join(' · ')) + '</p>' : '') +
+    creditsHtml(p) +
     (p.medium ? '<p>Medium: ' + S.esc(S.plain(p.medium)) + '</p>' : '') +
     S.paras(p.desc).map((t) => '<p>' + S.esc(t) + '</p>').join('') +
     ((p.keywords || []).length ? '<p>Keywords: ' + S.esc(p.keywords.join(', ')) + '</p>' : '') +
@@ -125,7 +131,6 @@ function workPage(c, p) {
   const name = S.artist(c);
   const t = S.titleCase(p.title);
   const imgs = S.images(p);
-  const cr = S.credits(p);
   const description = S.oneLine((S.paras(p.desc).join(' ') || (t + ' by ' + name + '.')), 160);
   const others = (c.projects || []).filter((o) => o.id !== p.id);
   return {
@@ -148,7 +153,7 @@ function workPage(c, p) {
     body: '<main class="seo-prerender">' +
       '<nav><a href="/">' + S.esc(name) + '</a> / Projects</nav>' +
       '<article><h1>' + S.esc(t) + '</h1>' +
-      (cr.length ? '<p>' + S.esc(cr.join(' · ')) + '</p>' : '') +
+      creditsHtml(p) +
       (p.medium ? '<p>Medium: ' + S.esc(S.plain(p.medium)) + '</p>' : '') +
       S.paras(p.desc).map((x) => '<p>' + S.esc(x) + '</p>').join('') +
       ((p.keywords || []).length ? '<p>Keywords: ' + S.esc(p.keywords.join(', ')) + '</p>' : '') +

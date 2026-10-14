@@ -21,6 +21,43 @@ function RichText({ text }) {
   return <span style={{ whiteSpace: 'pre-wrap' }}>{parts}</span>;
 }
 
+// Client / collaborator credits. Names listed in the project's "Credit links"
+// (CMS) become links wherever they appear, "@handle" links to Instagram, and
+// [text](url) still works. Mirrors creditHtml() in api/_site.js.
+function creditUrl(u) {
+  u = (u || '').trim();
+  if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
+  return /^https?:\/\//i.test(u) ? u : 'https://' + u;
+}
+function CreditText({ text, links }) {
+  text = (text || '').trim();
+  if (!text) return null;
+  const named = (links || []).filter((l) => l && l.name && l.name.trim() && l.url && l.url.trim())
+    .map((l) => ({ name: l.name.trim(), url: creditUrl(l.url) }))
+    .sort((a, b) => b.name.length - a.name.length);           // longest name first
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(
+    '\\[([^\\]]+)\\]\\(([^)]+)\\)' +
+    '|(' + (named.length ? named.map((l) => esc(l.name)).join('|') : '(?!)') + ')' +   // group 3 = a credited name
+    '|(@[A-Za-z0-9._]*[A-Za-z0-9_])', 'gi');
+  const linkStyle = { color: '#8FB8FF', textDecoration: 'underline', textUnderlineOffset: 2 };
+  const parts = [];
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    let label = m[0], href;
+    if (m[1]) { label = m[1]; href = creditUrl(m[2]); }
+    else if (m[3]) { const hit = named.find((l) => l.name.toLowerCase() === m[3].toLowerCase()); href = hit && hit.url; }
+    else href = creditUrl(m[0]);
+    parts.push(href
+      ? <a key={m.index} href={href} target="_blank" rel="noopener" data-clickable style={linkStyle}>{label}</a>
+      : label);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <span style={{ whiteSpace: 'pre-wrap' }}>{parts}</span>;
+}
+
 // Compact thumbnail grid for quick reordering (shown in info panel when unlocked)
 function ReorderGrid({ order, gallery, onReorder }) {
   const [dragFrom, setDragFrom] = usePPState(null);
@@ -144,7 +181,12 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
       )}
       {p.client && (
         <div style={{ opacity: 0.6, marginTop: 6 }}>
-          Client: <RichText text={p.client} />
+          Client: <CreditText text={p.client} links={p.creditLinks} />
+        </div>
+      )}
+      {p.collab && (
+        <div style={{ opacity: 0.6, marginTop: 2 }}>
+          Collaborators: <CreditText text={p.collab} links={p.creditLinks} />
         </div>
       )}
       {p.desc && (

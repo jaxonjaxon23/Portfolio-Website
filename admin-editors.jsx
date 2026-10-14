@@ -279,6 +279,27 @@ function KeywordsEditor({ value, onChange }) {
   );
 }
 
+// name → link pairs for the Client / Collaborator credits (see CreditText on the site)
+function CreditLinksEditor({ links, onChange }) {
+  const list = links || [];
+  const set = (i, patch) => onChange(list.map((l, j) => j === i ? { ...l, ...patch } : l));
+  return (
+    <div>
+      {list.map((l, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr auto', gap: 8, marginBottom: 8 }}>
+          <input className="cms-input" value={l.name || ''} placeholder="Name, e.g. Superflux"
+            onChange={(e) => set(i, { name: e.target.value })} />
+          <input className="cms-input" value={l.url || ''} placeholder="https://superflux.in  or  @superflux"
+            onChange={(e) => set(i, { url: e.target.value })} />
+          <button className="cms-btn danger" style={{ padding: '6px 10px' }} title="Remove"
+            onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <button className="cms-btn ghost" onClick={() => onChange(list.concat([{ name: '', url: '' }]))}>+ Add credit link</button>
+    </div>
+  );
+}
+
 function ProjectEditor({ project, imgMap, onPatch, onAddImages, onDelete }) {
   const set = (k, v) => onPatch({ [k]: v });
   return (
@@ -288,6 +309,10 @@ function ProjectEditor({ project, imgMap, onPatch, onAddImages, onDelete }) {
         <Field label="Year"><Text value={project.year} onChange={(v) => set('year', v)} /></Field>
       </div>
       <Field label="Collaborator (optional)"><Text value={project.collab} onChange={(v) => set('collab', v)} placeholder="e.g. Amber McCartney" /></Field>
+      <Field label="Credit links"
+        hint="Each name listed here becomes a clickable link wherever it appears in the Client or Collaborator text. Use a website or an @instagram handle. Any @handle written in that text links to Instagram automatically.">
+        <CreditLinksEditor links={project.creditLinks} onChange={(v) => set('creditLinks', v)} />
+      </Field>
       <Field label="Client / context (optional)"><Text value={project.client} onChange={(v) => set('client', v)} /></Field>
       <Field label="Medium / materials (optional)"><Area value={project.medium} rows={2} onChange={(v) => set('medium', v)} /></Field>
       <Field label="Keywords"><KeywordsEditor value={project.keywords} onChange={(v) => set('keywords', v)} /></Field>

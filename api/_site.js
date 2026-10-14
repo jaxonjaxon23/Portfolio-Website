@@ -140,5 +140,38 @@ function mdToHtml(md) {
   return out.join('');
 }
 
+// Client / collaborator credits as HTML with links — same rules as CreditText
+// on the site: names from the project's creditLinks, "@handle" → Instagram,
+// and [text](url).
+function creditUrl(u) {
+  u = String(u || '').trim();
+  if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
+  return /^https?:\/\//i.test(u) ? u : 'https://' + u;
+}
+function creditLinks(p) {
+  return (p.creditLinks || []).filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim())
+    .map((l) => ({ name: String(l.name).trim(), url: creditUrl(l.url) }))
+    .sort((a, b) => b.name.length - a.name.length);
+}
+function creditHtml(text, p) {
+  text = String(text || '').trim();
+  const named = creditLinks(p);
+  const rx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('\\[([^\\]]+)\\]\\(([^)]+)\\)' +
+    '|(' + (named.length ? named.map((l) => rx(l.name)).join('|') : '(?!)') + ')' +   // group 3 = a credited name
+    '|(@[A-Za-z0-9._]*[A-Za-z0-9_])', 'gi');
+  let out = '', last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    out += esc(text.slice(last, m.index));
+    let label = m[0], href;
+    if (m[1]) { label = m[1]; href = creditUrl(m[2]); }
+    else if (m[3]) { const hit = named.find((l) => l.name.toLowerCase() === m[3].toLowerCase()); href = hit && hit.url; }
+    else href = creditUrl(m[0]);
+    out += href ? '<a href="' + esc(href) + '" rel="noopener">' + esc(label) + '</a>' : esc(label);
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
 module.exports = { SITE, read, loadContent, esc, plain, paras, oneLine, titleCase, abs, projectUrl, images, credits,
-  artist, altText, profiles, cvText, ogImage, mdToHtml };
+  artist, altText, profiles, cvText, ogImage, mdToHtml, creditHtml, creditLinks };
