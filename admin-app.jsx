@@ -190,13 +190,23 @@ function App() {
   const projects = content.projects;
   const patchProject = (id, patch) => setContent((c) => ({ ...c, projects: c.projects.map((p) => p.id === id ? { ...p, ...patch } : p) }));
 
-  // register a File at a target path; returns the path
+  // Register a File at a target path; returns the path. Files are renamed for
+  // image search: "<project>-<artist>-<n>.<ext>" (bio images: "<artist>-working-on-<n>").
+  // A path counts as taken if any gallery/bio src points at it — including
+  // already-uploaded files, whose src is the full Supabase URL ending in the
+  // same "<dir>/<file>" — so a new upload can never overwrite an existing one.
   const registerImage = (file, dir) => {
-    const base = window.slugify(file.name.replace(/\.[^.]+$/, '')) + (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
-    let path = 'images/' + dir + '/' + base;
-    let n = 1;
-    const taken = (pp) => projects.some((p) => (p.gallery || []).some((g) => g.src === pp)) || imgMapRef.current[pp];
-    while (taken(path)) { path = 'images/' + dir + '/' + base.replace(/(\.[^.]+)?$/, '-' + n + '$1'); n++; }
+    const ext = ((file.name.match(/\.[^.]+$/) || [''])[0] || '').toLowerCase();
+    const artist = window.slugify((content.bio && content.bio.name) || 'Jaxon Stickler');
+    const stem = dir === 'wip' ? artist + '-working-on' : window.slugify(dir) + '-' + artist;
+    const srcs = projects.flatMap((p) => (p.gallery || []).map((g) => g.src || ''))
+      .concat(((content.bio && content.bio.working) || []).map((w) => (w && w.img) || ''));
+    const taken = (pp) => {
+      const tail = '/' + pp.replace(/^images\//, '');
+      return !!imgMapRef.current[pp] || srcs.some((s) => s === pp || s.endsWith(tail));
+    };
+    let n = 1, path;
+    do { path = 'images/' + dir + '/' + stem + '-' + n + ext; n++; } while (taken(path));
     imgMapRef.current[path] = { url: URL.createObjectURL(file), file, isVideo: window.isVideoName(file.name) };
     return path;
   };

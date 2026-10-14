@@ -1,12 +1,11 @@
-// api/page.js — serves "/" and "/work/<id>" (see vercel.json rewrites).
+// api/page.js — serves "/", "/about", "/work/<id>" and "/cv" (see vercel.json).
 // Returns the normal app (app.html) with, added for crawlers and AI assistants:
-//   • title, description, canonical, Open Graph / Twitter tags
+//   • title, description, canonical, Open Graph / Twitter tags (JPEG previews)
 //   • JSON-LD (Person + the projects as CreativeWorks)
-//   • the bio and project text as plain HTML inside #root — React replaces it
+//   • the bio / project / CV text as plain HTML inside #root — React replaces it
 //     the moment the app starts, so visitors see the site exactly as before.
-// "/work/<id>" is a crawlable page per project; a person landing there is sent
-// straight to that project in the app ("/#<id>").
-// Any failure falls back to the untouched app.html, so the site never breaks.
+// "/cv" is for crawlers only: nothing on the site links to it (the app shows
+// the projects index there). Any failure falls back to the plain app.html.
 
 const S = require('./_site');
 
@@ -20,11 +19,14 @@ function headTags({ title, description, url, image, type, jsonld, noindex }) {
     '<meta property="og:title" content="' + S.esc(title) + '" />',
     '<meta property="og:description" content="' + S.esc(description) + '" />',
     '<meta property="og:url" content="' + S.esc(url) + '" />',
-    image ? '<meta property="og:image" content="' + S.esc(image) + '" />' : '',
-    '<meta name="twitter:card" content="' + (image ? 'summary_large_image' : 'summary') + '" />',
+    '<meta property="og:image" content="' + S.esc(image) + '" />',
+    '<meta property="og:image:type" content="image/jpeg" />',
+    '<meta property="og:image:width" content="1200" />',
+    '<meta property="og:image:height" content="630" />',
+    '<meta name="twitter:card" content="summary_large_image" />',
     '<meta name="twitter:title" content="' + S.esc(title) + '" />',
     '<meta name="twitter:description" content="' + S.esc(description) + '" />',
-    image ? '<meta name="twitter:image" content="' + S.esc(image) + '" />' : '',
+    '<meta name="twitter:image" content="' + S.esc(image) + '" />',
     '<link rel="alternate" type="text/plain" title="Summary for AI assistants" href="' + S.SITE + '/llms.txt" />',
     '<script type="application/ld+json">' + JSON.stringify(jsonld).replace(/</g, '\\u003c') + '</script>',
   ].filter(Boolean).join('\n');
@@ -35,13 +37,14 @@ function person(c) {
   return {
     '@type': 'Person',
     '@id': S.SITE + '/#person',
-    name: b.name || 'Jaxon Stickler',
+    name: S.artist(c),
     jobTitle: b.role || 'Designer/Artist',
     description: S.paras(b.statement).join(' '),
     url: S.SITE + '/',
     email: b.email ? 'mailto:' + b.email : undefined,
-    sameAs: [b.instagramUrl].filter(Boolean),
+    sameAs: S.profiles(c),                        // Instagram + hidden "Other profiles"
     homeLocation: c.location && c.location.city ? { '@type': 'Place', name: c.location.city } : undefined,
+    subjectOf: { '@type': 'WebPage', name: 'CV', url: S.SITE + '/cv' },
   };
 }
 
@@ -56,8 +59,8 @@ function creativeWork(p, c) {
     description: S.paras(p.desc).join(' ') || undefined,
     material: S.plain(p.medium) || undefined,
     keywords: (p.keywords || []).join(', ') || undefined,
-    image: imgs.slice(0, 6).map((g) => S.abs(g.src)),
-    creator: { '@id': S.SITE + '/#person', name: (c.bio && c.bio.name) || 'Jaxon Stickler' },
+    image: imgs.slice(0, 6).map((g) => ({ '@type': 'ImageObject', contentUrl: S.abs(g.src), caption: S.altText(c, p, g) })),
+    creator: { '@id': S.SITE + '/#person', name: S.artist(c) },
     contributor: S.plain(p.collab) || undefined,
     sourceOrganization: S.plain(p.client) || undefined,
   };
@@ -67,7 +70,7 @@ function bioHtml(c, headingTag) {
   const b = c.bio || {};
   const working = (b.working || []).map((w) => w && w.text).filter(Boolean);
   return [
-    '<' + headingTag + '>' + S.esc(b.name || 'Jaxon Stickler') + '</' + headingTag + '>',
+    '<' + headingTag + '>' + S.esc(S.artist(c)) + '</' + headingTag + '>',
     '<p>' + S.esc(b.role || 'Designer/Artist') + '</p>',
     S.paras(b.statement).map((t) => '<p>' + S.esc(t) + '</p>').join(''),
     b.openTo ? '<p>' + S.esc(b.openTo) + '</p>' : '',
@@ -76,6 +79,7 @@ function bioHtml(c, headingTag) {
     '<p>Contact: ' +
       (b.email ? '<a href="mailto:' + S.esc(b.email) + '">' + S.esc(b.email) + '</a>' : '') +
       (b.instagramUrl ? ' · Instagram <a href="' + S.esc(b.instagramUrl) + '">' + S.esc(b.instagram || b.instagramUrl) + '</a>' : '') +
+      ' · <a href="/cv">CV</a>' +
       (b.cvFile ? ' · <a href="/' + S.esc(String(b.cvFile).replace(/^\/+/, '')) + '">CV (PDF)</a>' : '') +
     '</p>',
   ].join('');
@@ -91,22 +95,21 @@ function projectSummaryHtml(p) {
     '</article>';
 }
 
-function homePage(c) {
+function homePage(c, about) {
   const b = c.bio || {};
-  const name = b.name || 'Jaxon Stickler';
+  const name = S.artist(c);
   const projects = c.projects || [];
-  const first = projects.map((p) => S.images(p)[0]).find(Boolean);
   const description = S.oneLine(name + ', ' + (b.role || 'designer/artist') + '. ' + S.paras(b.statement).join(' '), 160);
+  const title = about ? 'About — ' + name : name + ' — ' + (b.role || 'Designer/Artist');
   return {
-    title: name + ' — ' + (b.role || 'Designer/Artist'),
+    title,
     head: {
-      title: name + ' — ' + (b.role || 'Designer/Artist'),
-      description, url: S.SITE + '/', image: first ? S.abs(first.src) : '', type: 'profile',
+      title, description, url: S.SITE + (about ? '/about' : '/'), image: S.ogImage('home'), type: 'profile',
       jsonld: {
         '@context': 'https://schema.org',
         '@graph': [
           { '@type': 'WebSite', '@id': S.SITE + '/#website', url: S.SITE + '/', name: name, about: { '@id': S.SITE + '/#person' } },
-          { ...person(c), subjectOf: projects.map((p) => ({ '@id': S.projectUrl(p) + '#work' })) },
+          person(c),
           ...projects.map((p) => creativeWork(p, c)),
         ],
       },
@@ -119,8 +122,7 @@ function homePage(c) {
 }
 
 function workPage(c, p) {
-  const b = c.bio || {};
-  const name = b.name || 'Jaxon Stickler';
+  const name = S.artist(c);
   const t = S.titleCase(p.title);
   const imgs = S.images(p);
   const cr = S.credits(p);
@@ -130,7 +132,7 @@ function workPage(c, p) {
     title: t + (p.year ? ' (' + p.year + ')' : '') + ' — ' + name,
     head: {
       title: t + ' — ' + name,
-      description, url: S.projectUrl(p), image: imgs[0] ? S.abs(imgs[0].src) : '', type: 'article',
+      description, url: S.projectUrl(p), image: S.ogImage(p.id), type: 'article',
       jsonld: {
         '@context': 'https://schema.org',
         '@graph': [
@@ -150,8 +152,7 @@ function workPage(c, p) {
       (p.medium ? '<p>Medium: ' + S.esc(S.plain(p.medium)) + '</p>' : '') +
       S.paras(p.desc).map((x) => '<p>' + S.esc(x) + '</p>').join('') +
       ((p.keywords || []).length ? '<p>Keywords: ' + S.esc(p.keywords.join(', ')) + '</p>' : '') +
-      imgs.map((g, i) => '<figure><img src="' + S.esc(S.abs(g.src)) + '" alt="' + S.esc(t + ' by ' + name + ' — image ' + (i + 1)) + '" loading="lazy" /></figure>').join('') +
-      '<p><a href="/#' + encodeURIComponent(p.id) + '">View ' + S.esc(t) + ' on the interactive site</a></p>' +
+      imgs.map((g) => '<figure><img src="' + S.esc(S.abs(g.src)) + '" alt="' + S.esc(S.altText(c, p, g)) + '" loading="lazy" /></figure>').join('') +
       '</article>' +
       '<aside>' + bioHtml(c, 'h2') + '</aside>' +
       (others.length ? '<section><h2>More projects</h2><ul>' + others.map((o) =>
@@ -160,16 +161,27 @@ function workPage(c, p) {
   };
 }
 
-// people (not crawlers) opening /work/<id> go straight to the project in the app
-function redirectScript(id) {
-  return '<base href="/" />\n<script>try{history.replaceState(null,"","/#' +
-    encodeURIComponent(id).replace(/["<>\\]/g, '') + '")}catch(e){location.replace("/#' +
-    encodeURIComponent(id).replace(/["<>\\]/g, '') + '")}</script>';
+function cvPage(c) {
+  const name = S.artist(c);
+  const md = S.cvText(c);
+  const intro = S.oneLine(md.split(/\n\s*\n/).map((x) => x.trim()).filter((x) => x && !x.startsWith('#'))[1] ||
+    (name + ' — CV: work, exhibitions, education and awards.'), 160);
+  return {
+    title: 'CV — ' + name,
+    head: {
+      title: 'CV — ' + name, description: intro, url: S.SITE + '/cv', image: S.ogImage('home'), type: 'profile',
+      jsonld: { '@context': 'https://schema.org', '@graph': [
+        { '@type': 'ProfilePage', '@id': S.SITE + '/cv', url: S.SITE + '/cv', name: 'CV — ' + name, mainEntity: { '@id': S.SITE + '/#person' } },
+        person(c),
+      ] },
+    },
+    body: '<main class="seo-prerender"><nav><a href="/">' + S.esc(name) + '</a> / CV</nav><article>' +
+      S.mdToHtml(md) + '</article></main>',
+  };
 }
 
-function inject(template, page, workId) {
+function inject(template, page) {
   let html = template;
-  if (workId) html = html.replace(/<head>/i, '<head>\n' + redirectScript(workId));
   html = html.replace(/<title>[\s\S]*?<\/title>/i, '<title>' + S.esc(page.title) + '</title>\n' + headTags(page.head));
   // keep the prerendered text from adding a scrollbar under the preloader
   html = html.replace(/<\/style>/i, '  #root > .seo-prerender { max-height: 100vh; overflow: hidden; padding: 24px; font-family: Inter, sans-serif; color: #fff; }\n</style>');
@@ -178,9 +190,14 @@ function inject(template, page, workId) {
 }
 
 module.exports = async function handler(req, res) {
+  // the deployed template is the precompiled one from the build (public/app.html);
+  // locally, without a build, the source app.html is used
   let template;
-  try { template = S.read('app.html'); }
-  catch (e) { res.statusCode = 500; res.end('Site template missing'); return; }
+  try { template = S.read('public/app.html'); }
+  catch (_) {
+    try { template = S.read('app.html'); }
+    catch (e) { res.statusCode = 500; res.end('Site template missing'); return; }
+  }
 
   const send = (status, html) => {
     res.statusCode = status;
@@ -192,17 +209,19 @@ module.exports = async function handler(req, res) {
 
   try {
     const { content } = await S.loadContent();
-    const id = (req.query && req.query.project) || '';
-    if (id) {
-      const p = (content.projects || []).find((x) => x.id === id);
+    const q = req.query || {};
+    if (q.view === 'cv') return send(200, inject(template, cvPage(content)));
+    if (q.view === 'about') return send(200, inject(template, homePage(content, true)));
+    if (q.project) {
+      const p = (content.projects || []).find((x) => x.id === q.project);
       if (!p) {
-        const home = homePage(content);
+        const home = homePage(content, false);
         home.head.noindex = true;
-        return send(404, inject(template, home, null));
+        return send(404, inject(template, home));
       }
-      return send(200, inject(template, workPage(content, p), p.id));
+      return send(200, inject(template, workPage(content, p)));
     }
-    return send(200, inject(template, homePage(content), null));
+    return send(200, inject(template, homePage(content, false)));
   } catch (e) {
     console.error('page render failed', e);
     return send(200, template);   // never break the site: serve the plain app

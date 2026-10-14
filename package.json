@@ -1,0 +1,19 @@
+{
+  "name": "jaxon-stickler-portfolio",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/dev-server.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.7",
+    "@babel/preset-react": "^8.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

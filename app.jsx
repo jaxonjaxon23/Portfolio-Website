@@ -159,7 +159,7 @@ const THEME_ICON = { dark: '◑', light: '◐', alarm: '●' };
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const isMobile = useMobile();
-  const [view, setView] = useState(() => location.hash.slice(1) || 'index');
+  const [view, setView] = useState(() => viewFromLocation());
   const [hovered, setHovered] = useState(null);
   const bioRef = useRef(null);
   const [readoutTop, setReadoutTop] = useState(500);
@@ -206,9 +206,16 @@ function App() {
   }, [t.bgDarkness]);
 
   useEffect(() => {
-    const onHash = () => {setView(location.hash.slice(1) || 'index');setHovered(null);};
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    // back/forward buttons, in-app navigation, and any leftover "#id" links
+    const onNav = () => {setView(viewFromLocation());setHovered(null);};
+    window.addEventListener('popstate', onNav);
+    window.addEventListener('viewchange', onNav);
+    window.addEventListener('hashchange', onNav);
+    return () => {
+      window.removeEventListener('popstate', onNav);
+      window.removeEventListener('viewchange', onNav);
+      window.removeEventListener('hashchange', onNav);
+    };
   }, []);
 
   useEffect(() => {window.scrollTo(0, 0);}, [view]);
@@ -233,8 +240,8 @@ function App() {
     return () => ro.disconnect();
   }, [view]);
 
-  const go = (v) => {location.hash = v === 'index' ? '' : v;};
-  const openProject = (p) => {location.hash = p.id;};
+  const go = navigate;
+  const openProject = (p) => navigate(p.id);
 
   const project = view !== 'about' && view !== 'index' ?
   window.PROJECTS.find((p) => p.id === view) : null;
@@ -244,6 +251,16 @@ function App() {
   // Project pages: the gallery covers the background, so freeze the depth
   // cloud on its last frame instead of redrawing it every frame.
   const onProject = !!project;
+
+  // Page title per view (tabs, bookmarks, and how search engines label the page)
+  useEffect(() => {
+    const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
+    const name = bio.name || 'Jaxon Stickler';
+    document.title = project
+      ? displayTitle(project.title) + (project.year ? ' (' + project.year + ')' : '') + ' — ' + name
+      : isAbout ? 'About — ' + name
+      : name + ' — ' + (bio.role || 'Designer/Artist');
+  }, [view]);
   useEffect(() => {
     if (window.setDepthCloudFrozen) window.setDepthCloudFrozen(onProject);
   }, [onProject]);

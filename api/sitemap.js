@@ -6,7 +6,8 @@ const S = require('./_site');
 module.exports = async function handler(req, res) {
   const { content, updatedAt } = await S.loadContent();
   const lastmod = updatedAt ? '<lastmod>' + String(updatedAt).slice(0, 10) + '</lastmod>' : '';
-  const urls = [S.SITE + '/', S.SITE + '/llms.txt'].concat((content.projects || []).map(S.projectUrl));
+  const urls = [S.SITE + '/', S.SITE + '/about', S.SITE + '/cv', S.SITE + '/llms.txt']
+    .concat((content.projects || []).map(S.projectUrl));
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     urls.map((u) => '  <url><loc>' + S.esc(u) + '</loc>' + lastmod + '</url>').join('\n') +

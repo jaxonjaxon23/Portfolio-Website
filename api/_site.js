@@ -103,5 +103,42 @@ const abs = (src) => { try { return new URL(src, SITE + '/').href; } catch (_) {
 const projectUrl = (p) => SITE + '/work/' + encodeURIComponent(p.id);
 const images = (p) => (p.gallery || []).filter((g) => g && g.type === 'image' && g.src);
 const credits = (p) => [p.year, plain(p.client), plain(p.collab)].map((x) => (x || '').trim()).filter(Boolean);
+const artist = (c) => (c.bio && c.bio.name) || 'Jaxon Stickler';
+// image description: the CMS caption, else "<Project> by <name> — image N" (same as the site)
+const altText = (c, p, g) => (g && g.alt) || (titleCase(p.title) + ' by ' + artist(c) + ' — image ' + ((p.gallery || []).indexOf(g) + 1));
 
-module.exports = { SITE, read, loadContent, esc, plain, paras, oneLine, titleCase, abs, projectUrl, images, credits };
+// Instagram + the "Other profiles" CMS field (one URL per line; not shown on the site)
+function profiles(c) {
+  const b = c.bio || {};
+  const list = [b.instagramUrl].concat(String(b.profiles || '').split(/\s+/));
+  return Array.from(new Set(list.map((u) => (u || '').trim()).filter((u) => /^https?:\/\//i.test(u))));
+}
+
+// CV text: the CMS field if filled in, otherwise cv.md from the repo
+function cvText(c) {
+  const t = c.bio && c.bio.cvText && String(c.bio.cvText).trim();
+  if (t) return t;
+  try { return read('cv.md'); } catch (_) { return ''; }
+}
+
+// Share-preview image: a JPEG made by api/og.js from the project's first image
+const ogImage = (id) => SITE + '/og/' + encodeURIComponent(id || 'home') + '.jpg';
+
+// Minimal Markdown → HTML for the CV ("#"/"##"/"###" headings, "- " lists, paragraphs)
+function mdToHtml(md) {
+  const out = []; let list = false;
+  const close = () => { if (list) { out.push('</ul>'); list = false; } };
+  String(md || '').split(/\r?\n/).forEach((line) => {
+    const t = line.trim();
+    const h = /^(#{1,3})\s+(.*)$/.exec(t);
+    if (!t) { close(); return; }
+    if (h) { close(); const lv = Math.min(3, h[1].length + 1); out.push('<h' + lv + '>' + esc(h[2]) + '</h' + lv + '>'); return; }
+    if (/^[-*]\s+/.test(t)) { if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + esc(t.replace(/^[-*]\s+/, '')) + '</li>'); return; }
+    close(); out.push('<p>' + esc(t) + '</p>');
+  });
+  close();
+  return out.join('');
+}
+
+module.exports = { SITE, read, loadContent, esc, plain, paras, oneLine, titleCase, abs, projectUrl, images, credits,
+  artist, altText, profiles, cvText, ogImage, mdToHtml };

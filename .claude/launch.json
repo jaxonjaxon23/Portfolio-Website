@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "site", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "5510"], "port": 5510 }
+    { "name": "site", "runtimeExecutable": "node", "runtimeArgs": ["tools/dev-server.mjs", "--public"], "port": 5510 }
   ]
 }

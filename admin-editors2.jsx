@@ -101,7 +101,33 @@ function BioEditor({ bio, imgMap, onPatch, onAddImage }) {
         <Field label="Instagram handle"><Text value={bio.instagram} onChange={(v) => set('instagram', v)} /></Field>
       </div>
       <Field label="Instagram URL"><Text value={bio.instagramUrl} onChange={(v) => set('instagramUrl', v)} /></Field>
+      <Field label="Other profiles — search engines only, not shown on the site"
+        hint="One link per line: LinkedIn, Are.na, Superflux team page, press articles… Helps Google and AI assistants know these are all you.">
+        <Area value={bio.profiles} rows={3} onChange={(v) => set('profiles', v)} placeholder={'https://www.linkedin.com/in/…\nhttps://www.are.na/…'} />
+      </Field>
+      <CvEditor value={bio.cvText} onChange={(v) => set('cvText', v)} />
     </Card>
+  );
+}
+
+// ---- CV text (crawler-only page at /cv) ----
+function CvEditor({ value, onChange }) {
+  const [err, setErr] = useA2State('');
+  const loadBuiltIn = () => {
+    setErr('');
+    fetch('cv.md', { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(); return r.text(); })
+      .then(onChange).catch(() => setErr("Couldn't load the built-in CV."));
+  };
+  return (
+    <Field label="CV — search engines only (page at /cv, not linked on the site)"
+      hint={'Plain text: "## Heading" for sections, "- " for list items. Leave empty to use the CV built into the site.'}>
+      <Area value={value} rows={8} onChange={onChange} placeholder="Empty — the built-in CV (cv.md) is used." />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+        <button className="cms-btn ghost" style={{ padding: '5px 10px' }} onClick={loadBuiltIn}>Load built-in CV to edit</button>
+        {value && <button className="cms-btn ghost" style={{ padding: '5px 10px' }} onClick={() => onChange('')}>Clear (use built-in)</button>}
+        {err && <span style={{ color: 'var(--danger)', fontSize: 12 }}>{err}</span>}
+      </div>
+    </Field>
   );
 }
 

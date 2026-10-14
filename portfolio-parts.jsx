@@ -16,6 +16,54 @@ function useMobile() {
 }
 
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+// ---------------------------------------------------------------- page addresses
+// Real URLs so every page can be linked to and indexed: "/" (projects index),
+// "/about", "/work/<id>". Old "/#<id>" links are converted on load.
+function viewFromLocation() {
+  const legacy = location.hash.slice(1);
+  if (legacy) return decodeURIComponent(legacy);
+  const p = location.pathname.replace(/\/+$/, '');
+  if (p === '/about') return 'about';
+  const m = /^\/work\/([^/]+)$/.exec(p);
+  return m ? decodeURIComponent(m[1]) : 'index';
+}
+function pathForView(v) {
+  return v === 'index' ? '/' : v === 'about' ? '/about' : '/work/' + encodeURIComponent(v);
+}
+function navigate(v) {
+  const path = pathForView(v);
+  if (location.pathname + location.hash !== path) history.pushState(null, '', path);
+  window.dispatchEvent(new Event('viewchange'));
+}
+if (location.hash.length > 1) {
+  try { history.replaceState(null, '', pathForView(viewFromLocation())); } catch (_) {}
+}
+
+// Titles are stored in caps; readable case for page titles and image descriptions
+// (short acronyms like BC/USB/OSA stay in caps). Mirrors api/_site.js.
+function displayTitle(s) {
+  if (!s || s !== s.toUpperCase()) return s || '';
+  return s.replace(/[A-Z]+/g, (w) => (w.length <= 3 && !/^(ME|MY|OF|THE|AND|TO|IN|ON|A|AN|OR|FOR|AT|BY|IS|IT)$/.test(w))
+    ? w : w[0] + w.slice(1).toLowerCase());
+}
+function artistName() {
+  return (window.SITE_CONTENT && window.SITE_CONTENT.bio && window.SITE_CONTENT.bio.name) || 'Jaxon Stickler';
+}
+
+// Image description (alt text): the CMS caption if set, otherwise
+// "<Project> by <name> — image N" (N = position in the project's gallery).
+const defaultAlts = new WeakMap();
+function altFor(item) {
+  if (!item) return '';
+  if (item.alt) return item.alt;
+  if (!defaultAlts.has(item)) {
+    (window.PROJECTS || []).forEach((p) => (p.gallery || []).forEach((g, i) => {
+      if (g && typeof g === 'object') defaultAlts.set(g, displayTitle(p.title) + ' by ' + artistName() + ' — image ' + (i + 1));
+    }));
+  }
+  return defaultAlts.get(item) || '';
+}
 // BluuNext (Velvetyne, OFL) — name + project titles. Files in assets/fonts/bluunext.
 const DISPLAY_FONT = "'BluuNext', Georgia, serif";
 
@@ -35,7 +83,7 @@ function GalleryItem({ item, rounded }) {
   const radius = rounded ? 4 : 0;
   if (item.type === 'video') {
     return (
-      <video src={item.src} autoPlay loop muted playsInline preload="metadata"
+      <video src={item.src} aria-label={altFor(item)} autoPlay loop muted playsInline preload="metadata"
       ref={(el) => {
         if (!el) return;
         el.defaultMuted = true; el.muted = true; el.volume = 0;
@@ -75,7 +123,7 @@ function GalleryItem({ item, rounded }) {
       </div>);
   }
   return (
-    <img src={item.src} alt="" draggable="false" loading="lazy" decoding="async"
+    <img src={item.src} alt={altFor(item)} draggable="false" loading="lazy" decoding="async"
     style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }} />);
 
 }
@@ -178,14 +226,14 @@ const BUBBLE = {
 };
 
 // Top-of-bubble nav: About / state-glyph / Index. The middle glyph is a "+"
-// normally and a "○" while a project is open. Self-contained — navigates via hash
+// normally and a "○" while a project is open. Self-contained — navigates itself
 // so it can be dropped into any bubble without prop threading.
 function BubbleNav() {
-  const cur = (location.hash.slice(1) || 'index');
+  const cur = viewFromLocation();
   const isProject = cur && cur !== 'index' && cur !== 'about';
   const mobile = window.innerWidth < 768;
   const graphic = window.__navGraphic;
-  const go = (v) => { location.hash = (v === 'index' ? '' : v); };
+  const go = navigate;
   const btn = (active) => ({
     fontFamily: FONT, color: '#fff', fontSize: 12, letterSpacing: '0.02em',
     background: 'none', border: 'none', padding: 0, cursor: 'pointer',

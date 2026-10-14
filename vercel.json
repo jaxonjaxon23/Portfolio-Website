@@ -1,15 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "redirects": [
+    { "source": "/app.html", "destination": "/", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/", "destination": "/api/page" },
     { "source": "/index.html", "destination": "/api/page" },
+    { "source": "/about", "destination": "/api/page?view=about" },
+    { "source": "/cv", "destination": "/api/page?view=cv" },
     { "source": "/work/:id", "destination": "/api/page?project=:id" },
+    { "source": "/og/:id.jpg", "destination": "/api/og?id=:id" },
     { "source": "/llms.txt", "destination": "/api/llms" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" }
   ],
   "functions": {
     "api/*.js": {
-      "includeFiles": "{app.html,content.js,layout.js,supabase-config.js}"
+      "includeFiles": "{app.html,public/app.html,content.js,layout.js,supabase-config.js,cv.md}"
     }
   }
 }

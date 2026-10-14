@@ -26,6 +26,8 @@ module.exports = async function handler(req, res) {
     working.length ? '- Currently working on: ' + working.join(', ') : '',
     b.email ? '- Email: ' + b.email : '',
     b.instagramUrl ? '- Instagram: ' + (b.instagram ? b.instagram + ' (' + b.instagramUrl + ')' : b.instagramUrl) : '',
+    ...S.profiles(c).filter((u) => u !== b.instagramUrl).map((u) => '- Profile: ' + u),
+    '- CV: ' + S.SITE + '/cv',
     b.cvFile ? '- CV (PDF): ' + S.abs(b.cvFile) : '',
     '',
     '## Projects',

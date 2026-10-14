@@ -19,6 +19,12 @@ function fileToDataURL(file) {
 }
 function isVideoName(n) { return /\.(mp4|webm|mov|m4v)$/i.test(n); }
 function isGifName(n) { return /\.gif$/i.test(n); }
+// Readable title for defaults (stored titles are caps; short acronyms stay caps). Mirrors the site.
+function readableTitle(s) {
+  if (!s || s !== s.toUpperCase()) return s || '';
+  return s.replace(/[A-Z]+/g, (w) => (w.length <= 3 && !/^(ME|MY|OF|THE|AND|TO|IN|ON|A|AN|OR|FOR|AT|BY|IS|IT)$/.test(w))
+    ? w : w[0] + w.slice(1).toLowerCase());
+}
 
 const TZONES = [
   'Europe/Berlin', 'Europe/London', 'Europe/Paris', 'Europe/Amsterdam', 'Europe/Lisbon',
@@ -111,6 +117,9 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
   const [nat, setNat] = useAState({}); // src -> { w, h }
   const REAL_COL = 1180; // desktop gallery column max width on the live site
   const setW = (i, w) => onChange(gallery.map((it, j) => j === i ? { ...it, w } : it));
+  const setAlt = (i, alt) => onChange(gallery.map((it, j) => j === i ? { ...it, alt } : it));
+  const artist = (window.SITE_CONTENT && window.SITE_CONTENT.bio && window.SITE_CONTENT.bio.name) || 'Jaxon Stickler';
+  const defaultAlt = (i) => readableTitle(project.title) + ' by ' + artist + ' — image ' + (i + 1);
   const noteNat = (src, w, h) => setNat((m) => (m[src] && m[src].w === w) ? m : { ...m, [src]: { w, h } });
 
   const move = (from, to) => {
@@ -144,7 +153,7 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <label className="cms-field-label" style={{ margin: 0 }}>Gallery — first item is the index thumbnail</label>
         <div style={{ display: 'flex', gap: 4, background: 'var(--panel2)', borderRadius: 8, padding: 3 }}>
-          {[['arrange', 'Arrange'], ['preview', 'Page preview']].map(([m, lbl]) => (
+          {[['arrange', 'Arrange'], ['preview', 'Preview & descriptions']].map(([m, lbl]) => (
             <button key={m} onClick={() => setMode(m)}
               style={{ border: 'none', cursor: 'pointer', borderRadius: 6, padding: '5px 12px', fontSize: 12,
                 background: mode === m ? '#fff' : 'transparent', color: mode === m ? '#000' : 'var(--dim)', fontWeight: mode === m ? 600 : 400 }}>{lbl}</button>
@@ -221,6 +230,10 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
                       style={{ fontSize: 10, color: '#ffcf5c', whiteSpace: 'nowrap' }}>⚠ upscaled</span>}
                   <button onClick={() => remove(i)} title="Remove" style={{ ...miniBtn, background: 'transparent', color: 'var(--danger)', width: 20 }}>✕</button>
                 </div>
+                {(it.type === 'image' || it.type === 'video') &&
+                  <input className="cms-input" value={it.alt || ''} onChange={(e) => setAlt(i, e.target.value)}
+                    placeholder={'Description for search engines — default: ' + defaultAlt(i)}
+                    style={{ marginTop: 6, padding: '6px 9px', fontSize: 12 }} />}
               </div>
             );
           })}
@@ -234,7 +247,7 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
         <button className="cms-btn ghost" onClick={addEmbed}>Add embed</button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--dim2)', marginTop: 8 }}>
-        Page preview shows each item at the width it appears on the site. Drag a slider to resize; ⚠ upscaled means the file's resolution is lower than its display size and will look pixelated.
+        Preview & descriptions shows each item at the width it appears on the site, with an optional description used by search engines and screen readers (left blank, a default like "Wind Sensor by Jaxon Stickler — image 1" is used). Drag a slider to resize; ⚠ upscaled means the file's resolution is lower than its display size and will look pixelated.
       </div>
     </div>
   );
