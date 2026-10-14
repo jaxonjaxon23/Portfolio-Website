@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/", "destination": "/api/page" },
+    { "source": "/index.html", "destination": "/api/page" },
+    { "source": "/work/:id", "destination": "/api/page?project=:id" },
+    { "source": "/llms.txt", "destination": "/api/llms" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" }
+  ],
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "{app.html,content.js,layout.js,supabase-config.js}"
+    }
+  }
+}

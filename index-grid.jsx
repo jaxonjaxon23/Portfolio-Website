@@ -333,7 +333,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     // keeps tall columns reachable on short laptop screens.
     <div ref={scrollRef} style={{
       position: 'fixed', inset: 0, overflowX: 'auto', overflowY: isMobile ? 'hidden' : 'auto',
-      backgroundColor: 'var(--board-bg, rgba(8,9,10,0.62))', // thinned in alarm mode (index.html)
+      backgroundColor: 'var(--board-bg, rgba(8,9,10,0.62))', // thinned in alarm mode (app.html)
       backgroundImage: 'radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)',
       backgroundSize: '26px 26px', cursor: 'grab',
     }}>

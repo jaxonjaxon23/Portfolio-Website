@@ -1,0 +1,6 @@
+# All search engines and AI assistants are welcome.
+User-agent: *
+Allow: /
+Disallow: /admin.html
+
+Sitemap: https://www.jaxonstickler.com/sitemap.xml

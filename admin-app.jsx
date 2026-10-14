@@ -422,7 +422,7 @@ function Header({ tab, setTab, tabs, onLogout, onSave, busy, dirty }) {
           {dirty && !busy && <span className="cms-dot" />}
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <a href="index.html" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>View site ↗</a>
+        <a href="/" target="_blank" style={{ color: 'var(--dim)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>View site ↗</a>
         <button onClick={onLogout} style={{ background: 'none', border: 'none', color: 'var(--dim)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>Log out</button>
       </div>
     </div>
