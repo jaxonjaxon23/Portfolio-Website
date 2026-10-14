@@ -224,7 +224,7 @@ function GalleryEditor({ project, imgMap, onAddImages, onChange }) {
         </div>
       </div>}
 
-      <ImageDrop onFiles={onAddImages} label="+ Add images or videos to this project" />
+      <ImageDrop onFiles={onAddImages} label="+ Add images or videos to this project — optimized automatically (images → WebP, videos → compressed MP4)" />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <input className="cms-input" placeholder="Paste a YouTube or Vimeo URL to embed" value={embedUrl}
           onChange={(e) => setEmbedUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addEmbed()} />

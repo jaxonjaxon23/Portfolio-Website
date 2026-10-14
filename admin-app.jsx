@@ -33,6 +33,8 @@ function bakeLegacyOrders(c) {
   return { ...c, projects };
 }
 
+const fmtBytes = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB';
+
 const friendlySaveError = (msg) => {
   if (/row-level security|permission denied|JWT|not authorized|401|403/i.test(msg || '')) {
     return 'Not allowed to save — your login may have expired. Log out, sign in again, then save.';
@@ -104,6 +106,7 @@ function App() {
   const [loadState, setLoadState] = useMState(SB ? 'loading' : 'ok');
   const [loadErr, setLoadErr] = useMState('');
   const [status, setStatus] = useMState(null); // { kind: 'ok' | 'err', text }
+  const [processing, setProcessing] = useMState(null); // progress text while optimising media
   const savedSnap = useMRef(null); // JSON of the last loaded/saved state
 
   const snapOf = (c, pos, ent) => JSON.stringify({ c, pos, ent });
@@ -198,12 +201,39 @@ function App() {
     return path;
   };
 
-  const addImagesToProject = (id, files) => {
-    const items = files.map((f) => ({ type: window.isVideoName(f.name) ? 'video' : 'image', src: registerImage(f, id) }));
+  // Optimise dropped files before they're added (admin-media.js): images → WebP
+  // ≤2560px, videos → compressed H.264 MP4. Progress shows in the save bar.
+  const optimizeFiles = async (files) => {
+    if (!window.optimizeMedia) return files;
+    const out = [], kept = [];
+    let before = 0, after = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const label = 'Optimizing ' + f.name + (files.length > 1 ? ' (' + (i + 1) + '/' + files.length + ')' : '');
+      setProcessing(label + '…');
+      const r = await window.optimizeMedia(f, (p) => setProcessing(label + ' — ' + Math.round(p * 100) + '%'));
+      out.push(r.file);
+      before += r.before; after += r.after;
+      if (r.before === r.after) kept.push(f.name + ': ' + r.note);
+    }
+    setProcessing(null);
+    const saved = before > after ? 'Optimized: ' + fmtBytes(before) + ' → ' + fmtBytes(after) + '. ' : '';
+    setStatus({ kind: 'ok', text: (saved + (kept.length ? kept.join(' · ') : '')).trim() || 'Added.' });
+    return out;
+  };
+
+  const addImagesToProject = async (id, files) => {
+    if (processing) return;
+    const ready = await optimizeFiles(files);
+    const items = ready.map((f) => ({ type: window.isVideoName(f.name) ? 'video' : 'image', src: registerImage(f, id) }));
     setContent((c) => ({ ...c, projects: c.projects.map((p) => p.id === id ? { ...p, gallery: (p.gallery || []).concat(items) } : p) }));
   };
 
-  const addBioImage = (file, cb) => { const path = registerImage(file, 'wip'); cb(path); rerender(); };
+  const addBioImage = async (file, cb) => {
+    if (processing) return;
+    const [ready] = await optimizeFiles([file]);
+    const path = registerImage(ready, 'wip'); cb(path); rerender();
+  };
 
   const addProject = (title, year, layoutKey) => {
     const preset = LAYOUT_PRESETS[layoutKey] || LAYOUT_PRESETS.portrait;
@@ -227,6 +257,7 @@ function App() {
   // then upsert the whole content doc (incl. diagram positions) into one row.
   const publish = async () => {
     if (busy) return;
+    if (processing) { setStatus({ kind: 'err', text: 'Still optimizing a file — save once it finishes.' }); return; }
     if (!SB) { setStatus({ kind: 'err', text: 'Supabase not configured — fill in supabase-config.js' }); return; }
     if (loadState !== 'ok' && !confirm(
       "The live content never loaded, so you're editing the older bundled copy.\n\n" +
@@ -298,7 +329,7 @@ function App() {
           <span><b>Couldn't load the live content</b> ({loadErr}). You're looking at the older bundled copy — saving now would overwrite the live site.</span>
           <button className="cms-btn ghost" onClick={() => { if (!dirty || confirm('Reload the live content? Edits made here will be discarded.')) loadLive(); }}>Retry</button>
         </div>}
-      <SaveDock dirty={dirty} busy={busy} status={status} onSave={publish} onDismiss={() => setStatus(null)} />
+      <SaveDock dirty={dirty} busy={busy} status={status} processing={processing} onSave={publish} onDismiss={() => setStatus(null)} />
       <div style={{ flex: 1, maxWidth: 1080, width: '100%', margin: '0 auto', padding: '28px 28px 120px' }}>
 
         {tab === 'site' &&
@@ -397,21 +428,22 @@ function Header({ tab, setTab, tabs, onLogout, onSave, busy, dirty }) {
 
 // Floating save bar: slides up while there are unsaved edits, and reports the
 // result of the last save. Always reachable, whatever tab or scroll position.
-function SaveDock({ dirty, busy, status, onSave, onDismiss }) {
-  const show = dirty || busy || !!status;
+function SaveDock({ dirty, busy, status, processing, onSave, onDismiss }) {
+  const show = dirty || busy || !!status || !!processing;
   const err = status && status.kind === 'err';
   let text = 'Unsaved changes';
-  if (busy) text = 'Saving — uploading files and publishing…';
+  if (processing) text = processing;
+  else if (busy) text = 'Saving — uploading files and publishing…';
   else if (status) text = status.text;
   return (
     <div className={'cms-dock' + (show ? ' on' : '') + (err ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
       <span className="cms-dock-light" />
       <span className="cms-dock-text">{text}</span>
-      {(dirty || err) &&
+      {(dirty || err) && !processing &&
         <button className="cms-btn" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : err ? 'Try again' : 'Save changes'}</button>}
-      {status && !busy &&
+      {status && !busy && !processing &&
         <button className="cms-dock-x" onClick={onDismiss} aria-label="Dismiss">✕</button>}
-      {!status && !busy && <span className="cms-dock-kbd">Ctrl/⌘ S</span>}
+      {!status && !busy && !processing && <span className="cms-dock-kbd">Ctrl/⌘ S</span>}
     </div>
   );
 }
