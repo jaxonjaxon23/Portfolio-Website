@@ -105,7 +105,7 @@ function App() {
   // top of the bundled fallback and saving would overwrite the live site.
   const [loadState, setLoadState] = useMState(SB ? 'loading' : 'ok');
   const [loadErr, setLoadErr] = useMState('');
-  const [status, setStatus] = useMState(null); // { kind: 'ok' | 'err', text }
+  const [status, setStatus] = useMState(null); // { kind: 'ok' | 'warn' | 'err', text } — err = save failed
   const [processing, setProcessing] = useMState(null); // progress text while optimising media
   const savedSnap = useMRef(null); // JSON of the last loaded/saved state
 
@@ -205,20 +205,22 @@ function App() {
   // ≤2560px, videos → compressed H.264 MP4. Progress shows in the save bar.
   const optimizeFiles = async (files) => {
     if (!window.optimizeMedia) return files;
-    const out = [], kept = [];
+    const out = [], kept = [], refused = [];
     let before = 0, after = 0;
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const label = 'Optimizing ' + f.name + (files.length > 1 ? ' (' + (i + 1) + '/' + files.length + ')' : '');
       setProcessing(label + '…');
       const r = await window.optimizeMedia(f, (p) => setProcessing(label + ' — ' + Math.round(p * 100) + '%'));
+      if (r.error) { refused.push(r.error); continue; }   // never upload something the site can't show
       out.push(r.file);
       before += r.before; after += r.after;
       if (r.before === r.after) kept.push(f.name + ': ' + r.note);
     }
     setProcessing(null);
     const saved = before > after ? 'Optimized: ' + fmtBytes(before) + ' → ' + fmtBytes(after) + '. ' : '';
-    setStatus({ kind: 'ok', text: (saved + (kept.length ? kept.join(' · ') : '')).trim() || 'Added.' });
+    if (refused.length) setStatus({ kind: 'warn', text: 'Not added — ' + refused.join(' · ') + (saved ? ' ' + saved : '') });
+    else setStatus({ kind: 'ok', text: (saved + (kept.length ? kept.join(' · ') : '')).trim() || 'Added.' });
     return out;
   };
 
@@ -232,6 +234,7 @@ function App() {
   const addBioImage = async (file, cb) => {
     if (processing) return;
     const [ready] = await optimizeFiles([file]);
+    if (!ready) return;
     const path = registerImage(ready, 'wip'); cb(path); rerender();
   };
 
@@ -430,13 +433,14 @@ function Header({ tab, setTab, tabs, onLogout, onSave, busy, dirty }) {
 // result of the last save. Always reachable, whatever tab or scroll position.
 function SaveDock({ dirty, busy, status, processing, onSave, onDismiss }) {
   const show = dirty || busy || !!status || !!processing;
-  const err = status && status.kind === 'err';
+  const err = status && status.kind === 'err';            // save failed → offer a retry
+  const isAlert = err || (status && status.kind === 'warn');  // red styling for both
   let text = 'Unsaved changes';
   if (processing) text = processing;
   else if (busy) text = 'Saving — uploading files and publishing…';
   else if (status) text = status.text;
   return (
-    <div className={'cms-dock' + (show ? ' on' : '') + (err ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
+    <div className={'cms-dock' + (show ? ' on' : '') + (isAlert ? ' err' : '') + (status && status.kind === 'ok' && !dirty ? ' ok' : '')} role="status" aria-live="polite">
       <span className="cms-dock-light" />
       <span className="cms-dock-text">{text}</span>
       {(dirty || err) && !processing &&

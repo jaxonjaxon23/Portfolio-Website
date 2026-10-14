@@ -65,7 +65,10 @@ function ImageDrop({ onFiles, label }) {
   const [over, setOver] = useAState(false);
   const inputRef = useARef(null);
   const handle = (list) => {
-    const files = Array.from(list || []).filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || isVideoName(f.name) || isGifName(f.name));
+    // Windows often gives HEIC/TIFF files no MIME type, so also match by extension
+    const ok = (f) => window.isOptimizableMedia ? window.isOptimizableMedia(f)
+      : (f.type.startsWith('image/') || f.type.startsWith('video/') || isVideoName(f.name) || isGifName(f.name));
+    const files = Array.from(list || []).filter(ok);
     if (files.length) onFiles(files);
   };
   return (
@@ -81,7 +84,7 @@ function ImageDrop({ onFiles, label }) {
         transition: 'all .15s ease',
       }}>
       {label || 'Drop images / videos here, or click to choose'}
-      <input ref={inputRef} type="file" accept="image/*,video/*,.gif" multiple style={{ display: 'none' }}
+      <input ref={inputRef} type="file" accept="image/*,video/*,.heic,.heif,.tif,.tiff,.avif,.mov,.mkv,.avi,.m4v" multiple style={{ display: 'none' }}
         onChange={(e) => { handle(e.target.files); e.target.value = ''; }} />
     </div>
   );

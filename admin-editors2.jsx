@@ -70,7 +70,7 @@ function WorkingEditor({ items, imgMap, onChange, onAddImage }) {
                   </React.Fragment>
                 : <label className="cms-btn ghost" style={{ padding: '5px 10px', cursor: 'pointer' }}>
                     Add hover image
-                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                    <input type="file" accept="image/*,.heic,.heif,.tif,.tiff,.avif" style={{ display: 'none' }}
                       onChange={(e) => { const f = e.target.files[0]; if (f) onAddImage(f, (path) => set(i, { img: path })); e.target.value = ''; }} />
                   </label>}
             </div>
