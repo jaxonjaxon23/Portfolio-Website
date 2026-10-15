@@ -32,7 +32,7 @@ function creditUrl(u) {
 // CMS "Credit links" plus the confirmed ones in credit-links.js (the CMS wins
 // when both have the same name)
 function projectCredits(p) {
-  const own = (p.creditLinks || []).filter((l) => l && l.name);
+  const own = (p.creditLinks || []).filter((l) => l && l.name && l.name.trim() && l.url && l.url.trim());   // blank CMS rows don't block
   const taken = new Set(own.map((l) => l.name.trim().toLowerCase()));
   const suggested = ((window.SUGGESTED_CREDITS || {})[p.id] || []).filter((l) => !taken.has(l.name.trim().toLowerCase()));
   return own.concat(suggested);

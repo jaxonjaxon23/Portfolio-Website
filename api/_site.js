@@ -164,7 +164,7 @@ function suggested() {
 }
 // CMS "Credit links" plus credit-links.js (the CMS wins for the same name)
 function creditLinks(p) {
-  const own = (p.creditLinks || []).filter((l) => l && l.name);
+  const own = (p.creditLinks || []).filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim());   // blank CMS rows don't block
   const taken = new Set(own.map((l) => String(l.name).trim().toLowerCase()));
   const all = own.concat((suggested()[p.id] || []).filter((l) => !taken.has(String(l.name).trim().toLowerCase())));
   return all.filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim())
