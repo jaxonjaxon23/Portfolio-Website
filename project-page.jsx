@@ -29,6 +29,14 @@ function creditUrl(u) {
   if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
   return /^https?:\/\//i.test(u) ? u : 'https://' + u;
 }
+// CMS "Credit links" plus the confirmed ones in credit-links.js (the CMS wins
+// when both have the same name)
+function projectCredits(p) {
+  const own = (p.creditLinks || []).filter((l) => l && l.name);
+  const taken = new Set(own.map((l) => l.name.trim().toLowerCase()));
+  const suggested = ((window.SUGGESTED_CREDITS || {})[p.id] || []).filter((l) => !taken.has(l.name.trim().toLowerCase()));
+  return own.concat(suggested);
+}
 function CreditText({ text, links }) {
   text = (text || '').trim();
   if (!text) return null;
@@ -181,12 +189,12 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
       )}
       {p.client && (
         <div style={{ opacity: 0.6, marginTop: 6 }}>
-          Client: <CreditText text={p.client} links={p.creditLinks} />
+          Client: <CreditText text={p.client} links={projectCredits(p)} />
         </div>
       )}
       {p.collab && (
         <div style={{ opacity: 0.6, marginTop: 2 }}>
-          Collaborators: <CreditText text={p.collab} links={p.creditLinks} />
+          Collaborators: <CreditText text={p.collab} links={projectCredits(p)} />
         </div>
       )}
       {p.desc && (

@@ -151,8 +151,23 @@ function creditUrl(u) {
   if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
   return /^https?:\/\//i.test(u) ? u : 'https://' + u;
 }
+let suggestedCredits = null;
+function suggested() {
+  if (!suggestedCredits) {
+    try {
+      const sandbox = { window: {} };
+      vm.runInNewContext(read('credit-links.js'), sandbox, { timeout: 1000 });
+      suggestedCredits = sandbox.window.SUGGESTED_CREDITS || {};
+    } catch (_) { suggestedCredits = {}; }
+  }
+  return suggestedCredits;
+}
+// CMS "Credit links" plus credit-links.js (the CMS wins for the same name)
 function creditLinks(p) {
-  return (p.creditLinks || []).filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim())
+  const own = (p.creditLinks || []).filter((l) => l && l.name);
+  const taken = new Set(own.map((l) => String(l.name).trim().toLowerCase()));
+  const all = own.concat((suggested()[p.id] || []).filter((l) => !taken.has(String(l.name).trim().toLowerCase())));
+  return all.filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim())
     .map((l) => ({ name: String(l.name).trim(), url: creditUrl(l.url) }))
     .sort((a, b) => b.name.length - a.name.length);
 }

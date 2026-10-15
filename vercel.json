@@ -17,7 +17,7 @@
   ],
   "functions": {
     "api/*.js": {
-      "includeFiles": "{app.html,public/app.html,content.js,layout.js,supabase-config.js,cv.md}"
+      "includeFiles": "{app.html,public/app.html,content.js,layout.js,supabase-config.js,cv.md,credit-links.js}"
     }
   }
 }
