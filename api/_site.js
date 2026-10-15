@@ -122,7 +122,10 @@ function cvText(c) {
 }
 
 // Share-preview image: a JPEG made by api/og.js from the project's first image
-const ogImage = (id) => SITE + '/og/' + encodeURIComponent(id || 'home') + '.jpg';
+// The site-wide default is a screenshot of the projects page (assets/og/home.jpg,
+// re-take it with tools/og-shot.ps1 when the design changes).
+const ogImage = (id) => (!id || id === 'home') ? SITE + '/assets/og/home.jpg'
+  : SITE + '/og/' + encodeURIComponent(id) + '.jpg';
 
 // Minimal Markdown → HTML for the CV ("#"/"##"/"###" headings, "- " lists, paragraphs)
 function mdToHtml(md) {

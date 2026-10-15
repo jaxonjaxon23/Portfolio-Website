@@ -115,6 +115,10 @@ function homePage(c, about) {
         '@context': 'https://schema.org',
         '@graph': [
           { '@type': 'WebSite', '@id': S.SITE + '/#website', url: S.SITE + '/', name: name, about: { '@id': S.SITE + '/#person' } },
+          { '@type': 'WebPage', '@id': S.SITE + (about ? '/about' : '/') + '#page', url: S.SITE + (about ? '/about' : '/'), name: title,
+            isPartOf: { '@id': S.SITE + '/#website' }, about: { '@id': S.SITE + '/#person' },
+            primaryImageOfPage: { '@type': 'ImageObject', contentUrl: S.ogImage('home'), width: 1200, height: 630,
+              caption: 'Projects by ' + name } },
           person(c),
           ...projects.map((p) => creativeWork(p, c)),
         ],
