@@ -259,6 +259,35 @@ function App() {
     setSelId(id); setTab('projects');
   };
 
+  // One-click import of researched credit links (credit-links.json). Only adds a
+  // link when that name appears in the project's Client/Collaborator text and
+  // has no link yet — never edits text or existing links. Save to publish.
+  const addSuggestedCredits = async () => {
+    let suggested;
+    try {
+      const r = await fetch('credit-links.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      suggested = await r.json();
+    } catch (e) {
+      setStatus({ kind: 'warn', text: "Couldn't load the suggested credit links (" + e.message + ')' });
+      return;
+    }
+    let added = 0;
+    const next = content.projects.map((p) => {
+      const add = (suggested[p.id] || []).filter((s) => {
+        const text = ((p.client || '') + ' ' + (p.collab || '')).toLowerCase();
+        const have = (p.creditLinks || []).some((l) => (l.name || '').trim().toLowerCase() === s.name.toLowerCase());
+        return s.name && s.url && text.includes(s.name.toLowerCase()) && !have;
+      });
+      if (!add.length) return p;
+      added += add.length;
+      return { ...p, creditLinks: (p.creditLinks || []).concat(add.map((s) => ({ name: s.name, url: s.url }))) };
+    });
+    if (!added) { setStatus({ kind: 'ok', text: 'All suggested credit links are already added.' }); return; }
+    setContent((c) => ({ ...c, projects: next }));
+    setStatus({ kind: 'ok', text: 'Added ' + added + ' credit link' + (added === 1 ? '' : 's') + ' — check them under each project, then save.' });
+  };
+
   const deleteProject = (id) => {
     if (!confirm('Delete this project? It disappears from the live site when you save.')) return;
     setContent((c) => ({ ...c, projects: c.projects.filter((p) => p.id !== id) }));
@@ -356,7 +385,10 @@ function App() {
         {tab === 'projects' &&
           <div>
             <SectionTitle sub="Edit a project's text and gallery, or add a new one. Drag gallery items to reorder; the first item is the index thumbnail.">Projects</SectionTitle>
-            <AddProjectBar onAdd={addProject} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <AddProjectBar onAdd={addProject} />
+              <button className="cms-btn ghost" onClick={addSuggestedCredits}>Add suggested credit links</button>
+            </div>
             <div style={{ display: 'flex', gap: 20, marginTop: 18, alignItems: 'flex-start' }}>
               <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {projects.map((p) => (

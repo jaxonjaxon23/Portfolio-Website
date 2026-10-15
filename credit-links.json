@@ -1,0 +1,19 @@
+{
+  "rivers-dream": [
+    { "name": "Superflux", "url": "https://superflux.in/" }
+  ],
+  "tank": [
+    { "name": "Soft Centre", "url": "https://www.softcentre.com.au/" },
+    { "name": "2_Dual", "url": "https://2dualstudio.com/" },
+    { "name": "John Hoang", "url": "https://www.instagram.com/jhnh02/" }
+  ],
+  "paper-daggers": [
+    { "name": "Radiant Pavilion", "url": "https://www.radiantpavilion.com.au/" }
+  ],
+  "cure": [
+    { "name": "Radiant Pavilion", "url": "https://www.radiantpavilion.com.au/" }
+  ],
+  "gwcs": [
+    { "name": "City of Melbourne", "url": "https://www.melbourne.vic.gov.au/" }
+  ]
+}
