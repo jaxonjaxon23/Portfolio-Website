@@ -96,8 +96,10 @@ function App() {
     return map;
   });
   const imgMapRef = useMRef({}); // path -> { url, file, isVideo }
+  // Large-entity offset { dx, dy } from the info bubble (null = default spot).
+  // Older { left, top } saves are from a layout the site no longer uses → null.
   const [entityPos, setEntityPos] = useMState(() => {
-    try { return JSON.parse((window.BAKED_LAYOUT && window.BAKED_LAYOUT['large-entity-pos-v1']) || 'null'); } catch (_) { return null; }
+    try { return window.normEntityPos(JSON.parse((window.BAKED_LAYOUT && window.BAKED_LAYOUT['large-entity-pos-v2']) || 'null')); } catch (_) { return null; }
   });
   const [, force] = useMState(0);
   const rerender = () => force((n) => n + 1);
@@ -142,7 +144,7 @@ function App() {
         : clone(window.SITE_CONTENT);
       if (!d.ordersBaked) c = bakeLegacyOrders(c);
       if (d.positions) pos = { ...positions, ...d.positions };
-      if ('entityPos' in d) ent = d.entityPos;
+      if ('entityPos' in d) ent = window.normEntityPos(d.entityPos);
       setContent(c); setPositions(pos); setEntityPos(ent);
       savedSnap.current = snapOf(c, pos, ent);
       setLoadState('ok');

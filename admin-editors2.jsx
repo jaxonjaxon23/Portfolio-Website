@@ -211,10 +211,15 @@ function IndexOrderEditor({ projects, imgMap, onReorder }) {
 }
 
 // ---- Entity position (global; the large About-page vector entity) ----
-const ENTITY_DEFAULT = { left: -40, top: -712 }; // matches LARGE_ENTITY_DEFAULT bottom-anchor roughly
+// Offset of the entity's corner from the info bubble's top-left corner — the
+// same { dx, dy } the site uses (LARGE_ENTITY_DEFAULT in portfolio-parts.jsx).
+const ENTITY_DEFAULT = { dx: -64, dy: 106 };
+function normEntityPos(p) {
+  return p && typeof p.dx === 'number' && typeof p.dy === 'number' ? { dx: p.dx, dy: p.dy } : null;
+}
 function EntityPositionEditor({ pos, onChange }) {
-  const p = pos || ENTITY_DEFAULT;
-  const nudge = (dx, dy) => onChange({ left: p.left + dx, top: p.top + dy });
+  const p = normEntityPos(pos) || ENTITY_DEFAULT;
+  const nudge = (dx, dy) => onChange({ dx: p.dx + dx, dy: p.dy + dy });
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -231,7 +236,7 @@ function EntityPositionEditor({ pos, onChange }) {
         </div>
         <div style={{ color: 'var(--dim)', fontSize: 12, lineHeight: 1.7 }}>
           Nudges the large vector entity on the About page.<br />
-          Current offset: left {Math.round(p.left)}px, top {Math.round(p.top)}px.<br />
+          Offset from the info box: {Math.round(p.dx)}px across, {Math.round(p.dy)}px down{normEntityPos(pos) ? '' : ' (default)'}.<br />
           Saved to Supabase with the rest of your changes — click <b>Save</b> above.
         </div>
       </div>
@@ -244,6 +249,6 @@ const entBtnStyle = {
 };
 
 Object.assign(window, {
-  A_DEFAULT_NODES, defaultPosFor, ENTITY_DEFAULT,
+  A_DEFAULT_NODES, defaultPosFor, ENTITY_DEFAULT, normEntityPos,
   LocationEditor, BioEditor, DiagramPicker, IndexOrderEditor, EntityPositionEditor,
 });

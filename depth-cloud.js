@@ -140,7 +140,23 @@ void main() {
     if (!frozen && wake) wake();
   };
 
+  // The GPU can drop the drawing context (laptop sleep, driver update, the
+  // browser reclaiming GPU memory). Without handling, the background would
+  // stay blank or frozen until a reload: rebuild everything once it's back.
   window.initDepthCloud = function initDepthCloud(canvas) {
+    let stop = start(canvas);
+    const onLost = (e) => { e.preventDefault(); stop(); stop = function () {}; };   // preventDefault = ask for it back
+    const onRestored = () => { stop = start(canvas); };
+    canvas.addEventListener('webglcontextlost', onLost);
+    canvas.addEventListener('webglcontextrestored', onRestored);
+    return function cleanup() {
+      stop();
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
+    };
+  };
+
+  function start(canvas) {
     const attrs = {
       antialias: false, alpha: false, preserveDrawingBuffer: false,
       powerPreference: 'high-performance', desynchronized: true,
@@ -354,5 +370,5 @@ void main() {
       window.removeEventListener('resize', onResize);
       wake = null;
     };
-  };
+  }
 })();

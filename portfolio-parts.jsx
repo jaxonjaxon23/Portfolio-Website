@@ -136,7 +136,7 @@ function CanvasVideo({ item, radius }) {
     const c = ref.current; if (!c) return;
     const ctx = c.getContext('2d');
     const v = document.createElement('video');   // never added to the page
-    v.muted = true; v.defaultMuted = true; v.loop = true; v.playsInline = true; v.preload = 'auto';
+    v.muted = true; v.defaultMuted = true; v.loop = true; v.playsInline = true; v.preload = 'metadata';   // full download once near (see warm below)
     v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
     v.src = item.src;
     const hasRVFC = 'requestVideoFrameCallback' in v;
@@ -172,11 +172,16 @@ function CanvasVideo({ item, radius }) {
     // play only while on (or near) the screen and the tab is visible
     const io = new IntersectionObserver((es) => es.forEach((e) => { inView = e.isIntersecting; if (inView) start(); else v.pause(); }), { rootMargin: '150px' });
     io.observe(c);
+    // within about a screen: start buffering, so it's ready when it arrives
+    const warm = new IntersectionObserver((es) => es.forEach((e) => {
+      if (e.isIntersecting) v.preload = 'auto';   // browsers pick this up without a reload
+    }), { rootMargin: '100%' });
+    warm.observe(c);
     const ro = new ResizeObserver(size); ro.observe(c);
     const onVis = () => { if (document.hidden) v.pause(); else start(); };
     document.addEventListener('visibilitychange', onVis);
     return () => {
-      alive = false; io.disconnect(); ro.disconnect(); document.removeEventListener('visibilitychange', onVis);
+      alive = false; io.disconnect(); warm.disconnect(); ro.disconnect(); document.removeEventListener('visibilitychange', onVis);
       if (cb && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(cb);
       cancelAnimationFrame(raf);
       v.pause(); v.removeAttribute('src'); v.load();   // release the decoder
@@ -451,6 +456,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
   const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
   const working = Array.isArray(bio.working) ? bio.working : [];
   const [hov, setHov] = usePState(null); // { i, x, y } while a "working on" item with an image is hovered
+  const cvFile = bio.cvFile || 'assets/Jaxon_Stickler_CV.pdf';   // the CMS can point this at a new file
   return (
     <div ref={ref} id={mobile ? undefined : 'about-bubble'} style={mobile ? {
       ...BUBBLE, position: 'relative', width: '100%', boxSizing: 'border-box',
@@ -494,14 +500,14 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
       <div>Email: <a href={'mailto:' + (bio.email || 'jaxonstickler@gmail.com')} data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{bio.email || 'jaxonstickler@gmail.com'}</a></div>
       <div style={{ marginBottom: 22 }}>Instagram: <a href={bio.instagramUrl || 'https://instagram.com/jaxonstickler'} target="_blank" rel="noopener" data-clickable style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{bio.instagram || '@jaxonstickler'}</a></div>
 
-      <a href={bio.cvFile || 'assets/Jaxon_Stickler_CV.pdf'} download="Jaxon_Stickler_CV.pdf" target="_blank" rel="noopener" data-clickable onClick={(e) => {
+      <a href={cvFile} download="Jaxon_Stickler_CV.pdf" target="_blank" rel="noopener" data-clickable onClick={(e) => {
         // Try a real download via blob (works on hosted http/https). If the
         // environment blocks it (sandboxed preview iframe), fall back to
         // opening the PDF in a new tab so the visitor can still save it.
         // If even that is blocked, let the native href/download proceed.
         var canPop = false;
         try {
-          fetch('assets/Jaxon_Stickler_CV.pdf').then(function (r) {
+          fetch(cvFile).then(function (r) {
             if (!r.ok) throw new Error('http ' + r.status);
             return r.blob();
           }).then(function (b) {
@@ -511,7 +517,7 @@ const BioAbout = React.forwardRef(function BioAbout({ locationStyle, mobile = fa
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
           }).catch(function () {
-            try { window.open('assets/Jaxon_Stickler_CV.pdf', '_blank', 'noopener'); }
+            try { window.open(cvFile, '_blank', 'noopener'); }
             catch (_) {}
           });
           e.preventDefault();

@@ -37,9 +37,19 @@
       window.BAKED_LAYOUT['diagram-node-pos-v1'] = JSON.stringify(data.positions);
       try { localStorage.removeItem('diagram-node-pos-v1'); } catch (_) {}
     }
-    if (data.entityPos && typeof data.entityPos === 'object') {
-      window.BAKED_LAYOUT['large-entity-pos-v1'] = JSON.stringify(data.entityPos);
-      try { localStorage.removeItem('large-entity-pos-v1'); } catch (_) {}
+    // Large entity: an offset { dx, dy } from the info bubble's corner (what the
+    // site reads as 'large-entity-pos-v2'). null = the default spot. Older saves
+    // used { left, top } in a coordinate system the site no longer has; those
+    // are ignored, so the entity stays where it is today.
+    if ('entityPos' in data) {
+      var ep = data.entityPos;
+      if (ep && typeof ep.dx === 'number' && typeof ep.dy === 'number') {
+        window.BAKED_LAYOUT['large-entity-pos-v2'] = JSON.stringify({ dx: ep.dx, dy: ep.dy });
+        try { localStorage.removeItem('large-entity-pos-v2'); } catch (_) {}
+      } else if (ep === null) {
+        delete window.BAKED_LAYOUT['large-entity-pos-v2'];
+        try { localStorage.removeItem('large-entity-pos-v2'); } catch (_) {}
+      }
     }
     if (data.ordersBaked) {
       Object.keys(window.BAKED_LAYOUT).forEach(function (k) {

@@ -239,6 +239,8 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     let idle = 0;
     const flushFar = () => {
       if (!far.size) return;
+      // glide mode moves the row without scroll events: still moving → wait
+      if (root.__movedAt && performance.now() - root.__movedAt < 400) { clearTimeout(idle); idle = setTimeout(flushFar, 400); return; }
       const gone = [...far]; far.clear();
       setNearCols((prev) => { const next = new Set(prev); gone.forEach((id) => next.delete(id)); return next; });
     };
@@ -306,6 +308,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     const apply = () => {
       track.style.transform = 'translate3d(' + (-x) + 'px,0,0)';
       el.__glideX = x;                      // (read by tests / debug)
+      el.__movedAt = performance.now();     // column unloading waits until the row is still
       drawBar();
     };
     const frame = (t) => {
@@ -373,13 +376,29 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     };
     const onUp = () => { dragging = null; el.style.cursor = ''; };
     const onKey = (e) => {
-      if (!el.offsetParent || e.target.closest && e.target.closest('input, textarea, select')) return;   // index hidden / typing
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      // board hidden (another page is showing) — offsetParent can't tell: it is
+      // always null for a position:fixed element
+      if (!el.getClientRects().length) return;
+      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], button, a')) return;   // typing / activating a control
       const page = el.clientWidth * 0.8;
-      const step = { ArrowRight: 160, ArrowLeft: -160, PageDown: page, PageUp: -page }[e.key];
+      const step = { ArrowRight: 160, ArrowLeft: -160, PageDown: page, PageUp: -page,
+        ' ': e.shiftKey ? -page : page }[e.key];
       if (step) { e.preventDefault(); by(step, SCROLL_EASE); }
       else if (e.key === 'Home') { e.preventDefault(); by(-target, SCROLL_EASE); }
       else if (e.key === 'End') { e.preventDefault(); by(max - target, SCROLL_EASE); }
     };
+    // The board can't be scrolled by the user (overflow-x: hidden), but the
+    // browser still scrolls it to reveal a find-in-page (Ctrl+F) match or a
+    // focused element. Fold any such scroll into the glide position, so the
+    // row stays where the browser put it and the two never fight.
+    const onNativeScroll = () => {
+      const s = el.scrollLeft;
+      if (!s) return;
+      el.scrollLeft = 0;
+      jump(x + s);
+    };
+    el.addEventListener('scroll', onNativeScroll, { passive: true });
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
@@ -387,6 +406,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     window.addEventListener('keydown', onKey);
     return () => {
       cancelAnimationFrame(raf); ro.disconnect();
+      el.removeEventListener('scroll', onNativeScroll);
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);

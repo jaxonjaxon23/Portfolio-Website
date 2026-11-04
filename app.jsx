@@ -69,7 +69,7 @@ function IndexReadout({ p }) {
 // Collects the authored arrangement out of localStorage and emits a layout.js
 // snapshot. Tries a real file download (works on a hosted/real browser); falls
 // back to an on-screen copy box when the sandboxed preview blocks downloads.
-const LAYOUT_KEY_RE = /^(diagram-node-pos|gallery-order-|preview-count-|index-project-order|project-column-order|large-entity-pos|project-links-|image-sizes-)/;
+const LAYOUT_KEY_RE = /^(diagram-node-pos|gallery-order-|preview-count-|index-project-order|project-column-order|large-entity-pos|project-links-|image-sizes-|gallery-widths-)/;
 
 function buildLayoutFile() {
   var snap = {};
