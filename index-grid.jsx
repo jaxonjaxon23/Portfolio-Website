@@ -91,7 +91,7 @@ function ThumbGrid({ order, gallery, onReorder }) {
   );
 }
 
-function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover }) {
+function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager }) {
   const orderKey = 'gallery-order-' + p.id;
   const countKey  = 'preview-count-' + p.id;
 
@@ -187,7 +187,7 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover }) {
         {visibleItems.map(({ item, origIdx }) => (
           <div key={origIdx} data-clickable onClick={() => onOpen(p)}
             style={{ cursor: 'pointer', lineHeight: 0 }}>
-            <GalleryItem item={item} rounded />
+            <GalleryItem item={item} rounded eager={eager} />
           </div>
         ))}
       </div>
@@ -375,6 +375,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
             <ProjectColumn
               p={p} cardMode={cardMode} imageLimit={imageLimit}
               locked={locked} onOpen={onOpen} onHover={onHover}
+              eager={colIdx < 3}
             />
           </div>
         ))}

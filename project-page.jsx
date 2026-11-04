@@ -378,7 +378,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
             const origIdx = order[displayIdx];
             return (
               <div key={origIdx} style={{ marginBottom: 10 }}>
-                <GalleryItem item={item} rounded />
+                <GalleryItem item={item} rounded eager={displayIdx < 2} />
               </div>
             );
           })}
@@ -423,7 +423,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
                 transition: 'opacity 0.15s ease, outline-color 0.1s ease',
               }}
             >
-              <GalleryItem item={item} />
+              <GalleryItem item={item} eager={displayIdx < 2} />
               {!locked && <ResizeHandle onMouseDown={(e) => startResize(origIdx, e)} />}
             </div>
           );

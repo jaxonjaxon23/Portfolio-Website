@@ -79,7 +79,7 @@ function wheelPx(delta, deltaMode, pageSize) {
 const DEPTH_BG = 'images/about/depth-bg.png';
 
 // ---------------------------------------------------------------- gallery item
-function GalleryItem({ item, rounded }) {
+function GalleryItem({ item, rounded, eager }) {
   const radius = rounded ? 4 : 0;
   if (item.type === 'video') {
     return (
@@ -122,10 +122,39 @@ function GalleryItem({ item, rounded }) {
         allowFullScreen></iframe>
       </div>);
   }
-  return (
-    <img src={item.src} alt={altFor(item)} draggable="false" loading="lazy" decoding="async"
-    style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }} />);
+  return <FadeImage item={item} radius={radius} eager={eager} />;
+}
 
+// Known pixel size of an image: saved by the CMS on upload (item.dims), or
+// measured at deploy time for existing images (window.MEDIA_DIMS, from the build).
+function dimsFor(item) {
+  const d = (item && item.dims) || (window.MEDIA_DIMS && item && window.MEDIA_DIMS[item.src]);
+  return d && d[0] > 0 && d[1] > 0 ? d : null;
+}
+
+// Image that reserves its final shape (no layout jump) and fades in once it has
+// loaded and decoded, instead of popping in. Cached images show immediately.
+function FadeImage({ item, radius, eager }) {
+  const [shown, setShown] = usePState(false);
+  const dims = dimsFor(item);
+  const reveal = (el) => {
+    if (!el || shown) return;
+    if (el.decode) el.decode().then(() => setShown(true), () => setShown(true));
+    else setShown(true);
+  };
+  return (
+    <img src={item.src} alt={altFor(item)} draggable="false"
+    loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined}
+    width={dims ? dims[0] : undefined} height={dims ? dims[1] : undefined}
+    ref={(el) => { if (el && el.complete && el.naturalWidth) reveal(el); }}
+    onLoad={(e) => reveal(e.currentTarget)}
+    onError={() => setShown(true)}
+    style={{
+      display: 'block', width: '100%', height: 'auto', borderRadius: radius,
+      aspectRatio: dims ? dims[0] + ' / ' + dims[1] : undefined,
+      background: shown ? 'transparent' : 'rgba(255,255,255,0.04)',
+      opacity: shown ? 1 : 0, transition: 'opacity .45s ease',
+    }} />);
 }
 
 // ---------------------------------------------------------- depth cloud bg

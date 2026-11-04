@@ -127,7 +127,7 @@
     if (webReady && s === 1 && blob.size >= file.size) return kept(file, 'kept as-is (already smaller than a conversion)');
     return {
       file: new File([blob], rename(file.name, e), { type: blob.type }),
-      before: file.size, after: blob.size,
+      before: file.size, after: blob.size, width: w, height: h,
       note: (s < 1 ? 'resized to ' + w + '×' + h + ', ' : '') + 'converted to ' + e.slice(1).toUpperCase(),
     };
   }

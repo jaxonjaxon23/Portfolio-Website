@@ -223,6 +223,7 @@ function App() {
       setProcessing(label + '…');
       const r = await window.optimizeMedia(f, (p) => setProcessing(label + ' — ' + Math.round(p * 100) + '%'));
       if (r.error) { refused.push(r.error); continue; }   // never upload something the site can't show
+      if (r.width && r.height) r.file.dims = [r.width, r.height];   // lets the site reserve the image's shape
       out.push(r.file);
       before += r.before; after += r.after;
       if (r.before === r.after) kept.push(f.name + ': ' + r.note);
@@ -237,7 +238,7 @@ function App() {
   const addImagesToProject = async (id, files) => {
     if (processing) return;
     const ready = await optimizeFiles(files);
-    const items = ready.map((f) => ({ type: window.isVideoName(f.name) ? 'video' : 'image', src: registerImage(f, id) }));
+    const items = ready.map((f) => ({ type: window.isVideoName(f.name) ? 'video' : 'image', src: registerImage(f, id), ...(f.dims ? { dims: f.dims } : {}) }));
     setContent((c) => ({ ...c, projects: c.projects.map((p) => p.id === id ? { ...p, gallery: (p.gallery || []).concat(items) } : p) }));
   };
 
