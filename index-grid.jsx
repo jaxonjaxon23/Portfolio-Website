@@ -291,12 +291,9 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
       if (e.ctrlKey) return;            // let pinch-zoom through
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // sideways trackpad swipe: native
       e.preventDefault();
-      const delta = wheelPx(e.deltaY, e.deltaMode, el.clientWidth);
-      if (liteRef.current) {            // lite mode: move directly, no animation
-        el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + delta));
-        return;
-      }
-      scroller.by(delta);
+      // eased in lite mode too: the easing costs next to nothing, and
+      // un-eased wheel steps (100px jumps) read as stutter on a mouse wheel
+      scroller.by(wheelPx(e.deltaY, e.deltaMode, el.clientWidth));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     const onBoardScroll = () => { scroller.sync(); noteGalleryScroll(el); };   // pause videos while moving

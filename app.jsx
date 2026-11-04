@@ -272,28 +272,31 @@ function App() {
   }, [onProject, lite]);
 
   // Lite mode (see projects.js): starts on for low-memory/low-CPU devices, and
-  // switches on here if the page is measured stuttering — after the loading
-  // screen, ~2 s of frames averaging under 25 fps. Remembered for this tab;
-  // ?lite=0 turns it off.
+  // switches on here only for a *sustained* low frame rate: 3 s measured once
+  // the loading screen has gone and the page has settled, with the typical
+  // (median) frame slower than 40 ms (< 25 fps). Start-up hiccups and one-off
+  // stalls don't count. Remembered for this tab; ?lite=0 turns it off.
   useEffect(() => {
     if (lite) return;
     try { if (sessionStorage.getItem('lite') === '0') return; } catch (_) {}
-    let raf = 0, start = 0, last = 0, frames = 0, gaps = 0, cancelled = false;
+    let raf = 0, start = 0, last = 0, gaps = [], cancelled = false, begin = 0;
     const tick = (now) => {
       if (cancelled) return;
-      if (document.hidden) { start = 0; last = 0; frames = 0; gaps = 0; raf = requestAnimationFrame(tick); return; }
-      if (!start) start = now;
-      else { const g = now - last; if (g < 250) { gaps += g; frames++; } }   // ignore one-off stalls
+      if (document.hidden) { start = 0; last = 0; gaps = []; raf = requestAnimationFrame(tick); return; }
+      if (!start) start = now; else gaps.push(now - last);
       last = now;
-      if (now - start < 2000) { raf = requestAnimationFrame(tick); return; }
-      if (frames > 10 && gaps / frames > 40) {
+      if (now - start < 3000) { raf = requestAnimationFrame(tick); return; }
+      const sorted = gaps.slice().sort((a, b) => a - b);
+      if (sorted.length > 20 && sorted[sorted.length >> 1] > 40) {
         window.LITE = true;
         try { sessionStorage.setItem('lite', '1'); } catch (_) {}
         setLite(true);
       }
     };
-    const begin = setTimeout(() => { raf = requestAnimationFrame(tick); }, 4000);   // after start-up work
-    return () => { cancelled = true; clearTimeout(begin); cancelAnimationFrame(raf); };
+    const whenSettled = () => { begin = setTimeout(() => { raf = requestAnimationFrame(tick); }, 3000); };
+    // wait for the loading screen to finish first
+    const poll = setInterval(() => { if (!document.getElementById('preloader')) { clearInterval(poll); whenSettled(); } }, 250);
+    return () => { cancelled = true; clearInterval(poll); clearTimeout(begin); cancelAnimationFrame(raf); };
   }, [lite]);
 
   let footerLeft = [];

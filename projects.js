@@ -40,8 +40,8 @@
   };
 
   // Lite mode for low-power machines: static background, 2 preview images per
-  // column, native scrolling. On when the device reports little memory/CPU or
-  // data saver; app.jsx also switches it on if the page is measured stuttering.
+  // column. On when the device reports little memory/CPU or data saver;
+  // app.jsx also switches it on for a sustained low frame rate.
   // ?lite=1 / ?lite=0 force it on/off (remembered for this tab).
   window.LITE = (function () {
     try {

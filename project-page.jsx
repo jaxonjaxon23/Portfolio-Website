@@ -294,7 +294,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
       return false;
     };
     const onWheel = (e) => {
-      if (e.ctrlKey || window.LITE) return;                  // pinch-zoom / lite mode: native
+      if (e.ctrlKey) return;                                 // pinch-zoom
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (nestedCanScroll(e.target, e.deltaY)) return;
       e.preventDefault();
