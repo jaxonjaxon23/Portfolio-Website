@@ -188,7 +188,7 @@ const ProjectColumn = React.memo(function ProjectColumn({ p, cardMode, imageLimi
         {visibleItems.map(({ item, origIdx }) => (
           <div key={origIdx} data-clickable onClick={() => onOpen(p)}
             style={{ cursor: 'pointer', lineHeight: 0 }}>
-            <GalleryItem item={item} rounded eager={eager} thumb placeholder={!near} />
+            <GalleryItem item={item} rounded eager={eager} preload={near} thumb placeholder={!near} />
           </div>
         ))}
       </div>
@@ -214,9 +214,11 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const scrollRef = useIRef(null);
   const toastTimer = useIRef(null);
 
-  // Only columns within ~1.5 screens of the view keep their images; further
-  // ones swap them for same-size placeholders so the browser can free the
-  // decoded pixels. Memory stays flat however far you scroll.
+  // Columns load their images once within ~1.5 screens of the view (so they're
+  // ready before they appear) and swap them for same-size placeholders only
+  // beyond ~3 screens, so the browser can free the decoded pixels. The gap
+  // between the two distances stops columns flip-flopping near the edge.
+  // Memory stays flat however far you scroll.
   const [nearCols, setNearCols] = useIState(() => new Set(allProjects.slice(0, 8).map((p) => p.id)));
   useIEffect(() => {
     const root = scrollRef.current;
@@ -232,17 +234,24 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     };
     const onScroll = () => { clearTimeout(idle); idle = setTimeout(flushFar, 400); };
     root.addEventListener('scroll', onScroll, { passive: true });
-    const io = new IntersectionObserver((entries) => {
+    const loadIO = new IntersectionObserver((entries) => {
       const add = [];
       entries.forEach((e) => {
+        if (!e.isIntersecting) return;
         const id = e.target.getAttribute('data-col-id');
-        if (e.isIntersecting) { far.delete(id); add.push(id); } else far.add(id);
+        far.delete(id); add.push(id);
       });
       if (add.length) setNearCols((prev) => add.every((id) => prev.has(id)) ? prev : new Set([...prev, ...add]));
-      clearTimeout(idle); idle = setTimeout(flushFar, 400);
     }, { root, rootMargin: '0px 150% 0px 150%' });
-    root.querySelectorAll('[data-col-id]').forEach((el) => io.observe(el));
-    return () => { io.disconnect(); root.removeEventListener('scroll', onScroll); clearTimeout(idle); };
+    const unloadIO = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        const id = e.target.getAttribute('data-col-id');
+        if (e.isIntersecting) far.delete(id); else far.add(id);
+      });
+      clearTimeout(idle); idle = setTimeout(flushFar, 400);
+    }, { root, rootMargin: '0px 300% 0px 300%' });
+    root.querySelectorAll('[data-col-id]').forEach((el) => { loadIO.observe(el); unloadIO.observe(el); });
+    return () => { loadIO.disconnect(); unloadIO.disconnect(); root.removeEventListener('scroll', onScroll); clearTimeout(idle); };
   }, [projectOrder]);
 
   const flashSaved = () => {

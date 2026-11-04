@@ -134,7 +134,7 @@ function noteGalleryScroll(root) {
   }, 150);
 }
 
-function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
+function GalleryItem({ item, rounded, eager, preload, thumb, placeholder }) {
   const radius = rounded ? 4 : 0;
   if (placeholder && (item.type === 'image' || item.type === 'video')) {
     // column far off-screen: keep the space, drop the pixels (frees memory)
@@ -165,7 +165,8 @@ function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
         const el = e.currentTarget; el.muted = true; el.volume = 0;
         if (el.videoWidth) videoShapes.set(item.src, [el.videoWidth, el.videoHeight]);
       }}
-      style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }}></video>);
+      style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius,
+        aspectRatio: (() => { const d = dimsFor(item) || videoShapes.get(item.src); return d ? d[0] + ' / ' + d[1] : undefined; })() }}></video>);
 
   }
   if (item.type === 'vimeo') {
@@ -188,8 +189,12 @@ function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
         allowFullScreen></iframe>
       </div>);
   }
-  return <FadeImage item={item} radius={radius} eager={eager} thumb={thumb} />;
+  return <FadeImage item={item} radius={radius} eager={eager} preload={preload} thumb={thumb} />;
 }
+
+// Images that have loaded once this visit: shown instantly when they mount
+// again (a column scrolled back into range), instead of fading in a second time.
+const loadedSrcs = new Set();
 
 // Known pixel size of an image: saved by the CMS on upload (item.dims), or
 // measured at deploy time for existing images (window.MEDIA_DIMS, from the build).
@@ -200,17 +205,20 @@ function dimsFor(item) {
 
 // Image that reserves its final shape (no layout jump) and fades in once it has
 // loaded and decoded, instead of popping in. Cached images show immediately.
-function FadeImage({ item, radius, eager, thumb }) {
-  const [shown, setShown] = usePState(false);
+function FadeImage({ item, radius, eager, preload, thumb }) {
+  const src = thumb && window.thumbFor ? window.thumbFor(item.src) : item.src;
+  const [shown, setShown] = usePState(() => loadedSrcs.has(src));
   const dims = dimsFor(item);
   const reveal = (el) => {
     if (!el || shown) return;
-    if (el.decode) el.decode().then(() => setShown(true), () => setShown(true));
-    else setShown(true);
+    const done = () => { loadedSrcs.add(src); setShown(true); };
+    if (el.decode) el.decode().then(done, done);
+    else done();
   };
   return (
-    <img src={thumb && window.thumbFor ? window.thumbFor(item.src) : item.src} alt={altFor(item)} draggable="false"
-    loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined}
+    <img src={src} alt={altFor(item)} draggable="false"
+    // eager: first screen (high priority); preload: columns about to scroll into view
+    loading={eager || preload ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined}
     width={dims ? dims[0] : undefined} height={dims ? dims[1] : undefined}
     ref={(el) => { if (el && el.complete && el.naturalWidth) reveal(el); }}
     onLoad={(e) => reveal(e.currentTarget)}

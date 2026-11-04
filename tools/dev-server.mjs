@@ -2,7 +2,8 @@
 // redirects/rewrites in vercel.json, runs the api/*.js functions, and serves
 // static files. `npm run dev` serves the source files (JSX compiled in the
 // browser); `npm run dev -- --public` serves the built public/ folder
-// (run `npm run build` first). Port 5510, or PORT.
+// (run `npm run build` first). Port 5510, or PORT. SLOW_MS=600 delays every
+// image/video response, to test loading on a slow connection.
 
 import http from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
@@ -13,6 +14,7 @@ const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
 const STATIC = process.argv.includes('--public') ? path.join(ROOT, 'public') : ROOT;
 const PORT = Number(process.env.PORT) || 5510;
+const SLOW_MS = Number(process.env.SLOW_MS) || 0;
 const cfg = JSON.parse(readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript',
@@ -59,6 +61,7 @@ const server = http.createServer(async (req, res) => {
   }
   const file = path.join(STATIC, decodeURIComponent(t.pathname));
   if (!file.startsWith(STATIC) || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404); return res.end('not found'); }
+  if (SLOW_MS && /\.(webp|jpe?g|png|gif|mp4)$/i.test(file)) await new Promise((r) => setTimeout(r, SLOW_MS));
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream' });
   createReadStream(file).pipe(res);
 });
