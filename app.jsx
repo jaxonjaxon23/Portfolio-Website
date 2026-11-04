@@ -167,7 +167,8 @@ function App() {
   const bioRef = useRef(null);
   const [readoutTop, setReadoutTop] = useState(500);
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme');
+    let saved = null;
+    try { saved = localStorage.getItem('theme'); } catch (_) {}   // storage blocked (privacy mode)
     return THEMES.includes(saved) ? saved : 'dark';
   });
 
@@ -175,7 +176,7 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('light-mode', theme === 'light');
     document.documentElement.classList.toggle('alarm-mode', theme === 'alarm');
-    localStorage.setItem('theme', theme);
+    try { localStorage.setItem('theme', theme); } catch (_) {}
   }, [theme]);
 
   // Large entity nudge (offset from its bubble-anchored home).

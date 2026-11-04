@@ -3,6 +3,16 @@
 
 const { useState: usePPState, useRef: usePPRef, useEffect: usePPEffect } = React;
 
+// Only web, email and on-site links become clickable: a typed-in
+// "javascript:" (or similar) link would run code when clicked.
+function safeHref(u) {
+  u = String(u || '').trim();
+  if (/^(https?:|mailto:)/i.test(u)) return u;
+  if (/^[\/#?]/.test(u) && !/^\/\//.test(u)) return u;        // /work/x, #id, ?q
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return null;             // any other scheme
+  return /^[\w-]+(\.[\w-]+)+([\/?#].*)?$/.test(u) ? 'https://' + u : null;   // bare domain
+}
+
 // Parse [text](url) markdown links inline
 function RichText({ text }) {
   if (!text) return null;
@@ -11,8 +21,9 @@ function RichText({ text }) {
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(
-      <a key={m.index} href={m[2]} target="_blank" rel="noopener" data-clickable
+    const href = safeHref(m[2]);
+    parts.push(!href ? m[1] :
+      <a key={m.index} href={href} target="_blank" rel="noopener" data-clickable
         style={{ color: '#8FB8FF', textDecoration: 'underline', textUnderlineOffset: 2 }}>{m[1]}</a>
     );
     last = m.index + m[0].length;
@@ -208,7 +219,7 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
         <div style={{ marginTop: 10 }}>
           {p.links.map((l, i) => (
             <div key={i}>
-              <a href={l.url} target="_blank" rel="noopener" data-clickable
+              <a href={safeHref(l.url) || undefined} target="_blank" rel="noopener" data-clickable
                 style={{ color: '#8FB8FF', textDecoration: 'underline', fontSize: 12 }}>{l.label || l.url}</a>
             </div>
           ))}
@@ -220,7 +231,7 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
         <div style={{ marginTop: 8 }}>
           {extraLinks.map((l, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <a href={l.url} target="_blank" rel="noopener" data-clickable
+              <a href={safeHref(l.url) || undefined} target="_blank" rel="noopener" data-clickable
                 style={{ color: '#8FB8FF', textDecoration: 'underline', fontSize: 12, flex: 1, wordBreak: 'break-all' }}>{l.label}</a>
               {!locked && (
                 <span onClick={() => removeLink(i)}

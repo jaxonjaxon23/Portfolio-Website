@@ -36,6 +36,9 @@ function bakeLegacyOrders(c) {
 const fmtBytes = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB';
 
 const friendlySaveError = (msg) => {
+  if (msg === 'CONFLICT') {
+    return 'The live site was changed from somewhere else while you were saving. Nothing was overwritten — press Save again to choose what to do.';
+  }
   if (/row-level security|permission denied|JWT|not authorized|401|403/i.test(msg || '')) {
     return 'Not allowed to save — your login may have expired. Log out, sign in again, then save.';
   }
@@ -108,6 +111,10 @@ function App() {
   const [status, setStatus] = useMState(null); // { kind: 'ok' | 'warn' | 'err', text } — err = save failed
   const [processing, setProcessing] = useMState(null); // progress text while optimising media
   const savedSnap = useMRef(null); // JSON of the last loaded/saved state
+  // updated_at of the live content this editor started from. A save only goes
+  // through if the live copy still has this stamp — otherwise someone saved in
+  // another tab/device meanwhile, and saving would silently wipe their edits.
+  const liveStamp = useMRef(null);
 
   const snapOf = (c, pos, ent) => JSON.stringify({ c, pos, ent });
 
@@ -116,17 +123,19 @@ function App() {
   const loadLive = () => {
     if (!SB) return;
     setLoadState('loading'); setLoadErr('');
-    SB.from('content').select('data').eq('id', 1).single().then((res) => {
+    SB.from('content').select('data,updated_at').eq('id', 1).single().then((res) => {
       if (res.error) throw new Error(res.error.message);
-      return (res.data && res.data.data) || {};
+      return res.data || {};
     }).catch(() =>
       // A stale stored login makes even this public read fail — retry anonymously.
-      fetch(window.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data', {
+      fetch(window.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data,updated_at', {
         headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY },
         cache: 'no-store',
       }).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then((rows) => (rows && rows[0] && rows[0].data) || {})
-    ).then((d) => {
+        .then((rows) => (rows && rows[0]) || {})
+    ).then((row) => {
+      const d = row.data || {};
+      liveStamp.current = row.updated_at || null;
       let pos = positions, ent = entityPos;
       let c = (d.location || d.bio || d.projects)
         ? { location: d.location || {}, bio: d.bio || {}, projects: Array.isArray(d.projects) ? d.projects : [] }
@@ -268,7 +277,7 @@ function App() {
 
   // ---- save to Supabase ----
   // Upload any new image Files to storage, swap their temp srcs for public URLs,
-  // then upsert the whole content doc (incl. diagram positions) into one row.
+  // then write the whole content doc (incl. diagram positions) into the one row.
   const publish = async () => {
     if (busy) return;
     if (processing) { setStatus({ kind: 'err', text: 'Still optimizing a file — save once it finishes.' }); return; }
@@ -280,6 +289,26 @@ function App() {
     try {
       const { data: sess } = await SB.auth.getSession();
       if (!sess || !sess.session) throw new Error('JWT: no session');
+
+      // Has the live copy changed since this editor loaded it (another tab or
+      // device saved)? Ask before replacing it, and before uploading anything.
+      const liveNow = async () => {
+        const r = await SB.from('content').select('updated_at').eq('id', 1).single();
+        if (r.error) throw new Error(r.error.message);
+        return r.data && r.data.updated_at;
+      };
+      const sameStamp = (a, b) => !!a && !!b && new Date(a).getTime() === new Date(b).getTime();
+      let force = !liveStamp.current;   // live content never loaded: already confirmed above
+      if (!force && !sameStamp(await liveNow(), liveStamp.current)) {
+        if (!confirm(
+          'The live site was changed after you opened the CMS — probably saved from another tab or device.\n\n' +
+          'OK = replace those changes with what is shown here.\n' +
+          'Cancel = do not save (reload the CMS to get the latest, then redo your edits).')) {
+          setStatus({ kind: 'warn', text: 'Not saved — the live site changed since you opened the CMS. Reload to get the latest.' });
+          return;
+        }
+        force = true;
+      }
 
       const map = imgMapRef.current;
       const replace = {};
@@ -302,12 +331,19 @@ function App() {
       projects.forEach((p, i) => { posObj[p.id] = positions[p.id] || window.defaultPosFor(i); });
 
       const doc = { location: out.location, bio: out.bio, projects: out.projects, positions: posObj, entityPos: entityPos, ordersBaked: true };
-      // .select() makes the write report back, so a silently-blocked write (0 rows) is caught
-      const { data: row, error } = await SB.from('content')
-        .upsert({ id: 1, data: doc, updated_at: new Date().toISOString() })
-        .select('updated_at').single();
+      // Write only if the live copy still has the stamp we started from (the
+      // server sets the new updated_at and keeps the old version in
+      // content_history). .select() reports back, so a blocked write is caught.
+      let q = SB.from('content').update({ data: doc }).eq('id', 1);
+      if (!force) q = q.eq('updated_at', liveStamp.current);
+      const { data: rows, error } = await q.select('updated_at');
       if (error) throw new Error(error.message);
-      if (!row) throw new Error('permission denied: nothing was written');
+      if (!rows || !rows.length) {
+        const now = await liveNow().catch(() => null);
+        if (!force && now && !sameStamp(now, liveStamp.current)) throw new Error('CONFLICT');
+        throw new Error('permission denied: nothing was written');
+      }
+      liveStamp.current = rows[0].updated_at;
 
       // Point local state at the uploaded URLs so re-saving won't re-upload.
       // Functional update keeps any edits made while the upload was running.
