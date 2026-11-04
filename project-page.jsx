@@ -306,6 +306,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
     };
     const onWheel = (e) => {
       if (e.ctrlKey) return;            // let pinch-zoom through
+      if (window.LITE) return;          // lite mode: native scrolling
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (nestedCanScroll(e.target, e.deltaY)) return;
       if (!raf) pos = targetY = window.scrollY;

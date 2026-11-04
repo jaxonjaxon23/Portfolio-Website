@@ -79,8 +79,16 @@ function wheelPx(delta, deltaMode, pageSize) {
 const DEPTH_BG = 'images/about/depth-bg.png';
 
 // ---------------------------------------------------------------- gallery item
-function GalleryItem({ item, rounded, eager }) {
+// Shapes of videos seen so far, so a placeholder can keep a video's size.
+const videoShapes = new Map();
+
+function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
   const radius = rounded ? 4 : 0;
+  if (placeholder && (item.type === 'image' || item.type === 'video')) {
+    // column far off-screen: keep the space, drop the pixels (frees memory)
+    const d = dimsFor(item) || videoShapes.get(item.src) || [4, 5];
+    return <div aria-hidden="true" style={{ width: '100%', aspectRatio: d[0] + ' / ' + d[1], borderRadius: radius, background: 'rgba(255,255,255,0.04)' }} />;
+  }
   if (item.type === 'video') {
     return (
       <video src={item.src} aria-label={altFor(item)} autoPlay loop muted playsInline preload="metadata"
@@ -98,7 +106,10 @@ function GalleryItem({ item, rounded, eager }) {
         el.__visObs.observe(el);
       }}
       onVolumeChange={(e) => { const el = e.currentTarget; if (!el.muted || el.volume !== 0) { el.muted = true; el.volume = 0; } }}
-      onLoadedMetadata={(e) => { e.currentTarget.muted = true; e.currentTarget.volume = 0; }}
+      onLoadedMetadata={(e) => {
+        const el = e.currentTarget; el.muted = true; el.volume = 0;
+        if (el.videoWidth) videoShapes.set(item.src, [el.videoWidth, el.videoHeight]);
+      }}
       style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius }}></video>);
 
   }
@@ -122,7 +133,7 @@ function GalleryItem({ item, rounded, eager }) {
         allowFullScreen></iframe>
       </div>);
   }
-  return <FadeImage item={item} radius={radius} eager={eager} />;
+  return <FadeImage item={item} radius={radius} eager={eager} thumb={thumb} />;
 }
 
 // Known pixel size of an image: saved by the CMS on upload (item.dims), or
@@ -134,7 +145,7 @@ function dimsFor(item) {
 
 // Image that reserves its final shape (no layout jump) and fades in once it has
 // loaded and decoded, instead of popping in. Cached images show immediately.
-function FadeImage({ item, radius, eager }) {
+function FadeImage({ item, radius, eager, thumb }) {
   const [shown, setShown] = usePState(false);
   const dims = dimsFor(item);
   const reveal = (el) => {
@@ -143,7 +154,7 @@ function FadeImage({ item, radius, eager }) {
     else setShown(true);
   };
   return (
-    <img src={item.src} alt={altFor(item)} draggable="false"
+    <img src={thumb && window.thumbFor ? window.thumbFor(item.src) : item.src} alt={altFor(item)} draggable="false"
     loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined}
     width={dims ? dims[0] : undefined} height={dims ? dims[1] : undefined}
     ref={(el) => { if (el && el.complete && el.naturalWidth) reveal(el); }}
@@ -312,7 +323,7 @@ function CursorPreview({ img, x, y }) {
       borderRadius: 3,
       overflow: 'hidden',
     }}>
-      <img src={img} alt="" draggable="false" style={{ width: '100%', display: 'block' }} />
+      <img src={window.thumbFor ? window.thumbFor(img) : img} alt="" draggable="false" style={{ width: '100%', display: 'block' }} />
     </div>,
     document.body
   );

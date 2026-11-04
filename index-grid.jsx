@@ -91,7 +91,7 @@ function ThumbGrid({ order, gallery, onReorder }) {
   );
 }
 
-function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager }) {
+function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager, near = true, lite = false }) {
   const orderKey = 'gallery-order-' + p.id;
   const countKey  = 'preview-count-' + p.id;
 
@@ -115,6 +115,7 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager
 
   const effective = Math.min(
     previewCount !== null ? previewCount : imageLimit,
+    lite ? window.LITE_IMAGES : Infinity,      // lite mode: fewer images per column
     p.gallery.length
   );
 
@@ -187,7 +188,7 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager
         {visibleItems.map(({ item, origIdx }) => (
           <div key={origIdx} data-clickable onClick={() => onOpen(p)}
             style={{ cursor: 'pointer', lineHeight: 0 }}>
-            <GalleryItem item={item} rounded eager={eager} />
+            <GalleryItem item={item} rounded eager={eager} thumb placeholder={!near} />
           </div>
         ))}
       </div>
@@ -195,7 +196,7 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager
   );
 }
 
-function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = false, locationStyle }) {
+function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = false, locationStyle, lite = false }) {
   const allProjects = window.PROJECTS;
   const orderKey = 'index-project-order-v1';
 
@@ -212,6 +213,28 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const [savedToast, setSavedToast] = useIState(false);
   const scrollRef = useIRef(null);
   const toastTimer = useIRef(null);
+
+  // Only columns within ~1.5 screens of the view keep their images; further
+  // ones swap them for same-size placeholders so the browser can free the
+  // decoded pixels. Memory stays flat however far you scroll.
+  const [nearCols, setNearCols] = useIState(() => new Set(allProjects.slice(0, 8).map((p) => p.id)));
+  useIEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      setNearCols((prev) => {
+        let next = null;
+        entries.forEach((e) => {
+          const id = e.target.getAttribute('data-col-id');
+          if (e.isIntersecting && !prev.has(id)) (next = next || new Set(prev)).add(id);
+          if (!e.isIntersecting && prev.has(id)) (next = next || new Set(prev)).delete(id);
+        });
+        return next || prev;
+      });
+    }, { root, rootMargin: '0px 150% 0px 150%' });
+    root.querySelectorAll('[data-col-id]').forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [projectOrder]);
 
   const flashSaved = () => {
     setSavedToast(true);
@@ -235,7 +258,10 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     setDragColFrom(null); setDragColOver(null);
   };
 
-  // Wheel → horizontal scroll (eased); mouse drag to pan
+  const liteRef = useIRef(lite);
+  liteRef.current = lite;
+
+  // Wheel → horizontal scroll (eased; direct in lite mode); mouse drag to pan
   useIEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -252,6 +278,11 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     const onWheel = (e) => {
       if (e.ctrlKey) return;            // let pinch-zoom through
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        if (liteRef.current) {            // lite: no per-frame easing work
+          el.scrollLeft += wheelPx(e.deltaY, e.deltaMode, el.clientWidth);
+          e.preventDefault();
+          return;
+        }
         if (!raf) pos = targetLeft = el.scrollLeft;
         const max = el.scrollWidth - el.clientWidth;
         targetLeft = Math.max(0, Math.min(max, targetLeft + wheelPx(e.deltaY, e.deltaMode, el.clientWidth)));
@@ -350,7 +381,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
           </div>
         )}
         {projects.map((p, colIdx) => (
-          <div key={p.id}
+          <div key={p.id} data-col-id={p.id}
             draggable={!locked}
             onDragStart={!locked ? (e) => { e.dataTransfer.effectAllowed = 'move'; setDragColFrom(colIdx); } : undefined}
             onDragOver={!locked ? (e) => { e.preventDefault(); setDragColOver(colIdx); } : undefined}
@@ -375,7 +406,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
             <ProjectColumn
               p={p} cardMode={cardMode} imageLimit={imageLimit}
               locked={locked} onOpen={onOpen} onHover={onHover}
-              eager={colIdx < 3}
+              eager={colIdx < 3} near={nearCols.has(p.id)} lite={lite}
             />
           </div>
         ))}

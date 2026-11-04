@@ -158,9 +158,11 @@
         if (!Array.isArray(order) || order.length !== p.gallery.length) order = p.gallery.map(function (_, i) { return i; });
         var count = parseInt(window.layoutGet('preview-count-' + p.id), 10);
         if (!(count > 0)) count = GLOBAL_LIMIT;
+        if (window.LITE) count = Math.min(count, window.LITE_IMAGES || 2);
         order.slice(0, count).forEach(function (i) {
           var g = p.gallery[i];
-          if (g && g.type === 'image' && g.src) urls.push(g.src);
+          // the projects page shows the small copies — preload those
+          if (g && g.type === 'image' && g.src) urls.push(window.thumbFor ? window.thumbFor(g.src) : g.src);
         });
       });
     } catch (e) {}

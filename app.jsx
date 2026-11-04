@@ -160,6 +160,7 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const isMobile = useMobile();
   const [view, setView] = useState(() => viewFromLocation());
+  const [lite, setLite] = useState(() => !!window.LITE);
   const [hovered, setHovered] = useState(null);
   const bioRef = useRef(null);
   const [readoutTop, setReadoutTop] = useState(500);
@@ -262,8 +263,33 @@ function App() {
       : name + ' — ' + (bio.role || 'Designer/Artist');
   }, [view]);
   useEffect(() => {
-    if (window.setDepthCloudFrozen) window.setDepthCloudFrozen(onProject);
-  }, [onProject]);
+    if (window.setDepthCloudFrozen) window.setDepthCloudFrozen(onProject || lite);
+  }, [onProject, lite]);
+
+  // Lite mode (see projects.js): starts on for low-memory/low-CPU devices, and
+  // switches on here if the page is measured stuttering — after the loading
+  // screen, ~2 s of frames averaging under 25 fps. Remembered for this tab;
+  // ?lite=0 turns it off.
+  useEffect(() => {
+    if (lite) return;
+    try { if (sessionStorage.getItem('lite') === '0') return; } catch (_) {}
+    let raf = 0, start = 0, last = 0, frames = 0, gaps = 0, cancelled = false;
+    const tick = (now) => {
+      if (cancelled) return;
+      if (document.hidden) { start = 0; last = 0; frames = 0; gaps = 0; raf = requestAnimationFrame(tick); return; }
+      if (!start) start = now;
+      else { const g = now - last; if (g < 250) { gaps += g; frames++; } }   // ignore one-off stalls
+      last = now;
+      if (now - start < 2000) { raf = requestAnimationFrame(tick); return; }
+      if (frames > 10 && gaps / frames > 40) {
+        window.LITE = true;
+        try { sessionStorage.setItem('lite', '1'); } catch (_) {}
+        setLite(true);
+      }
+    };
+    const begin = setTimeout(() => { raf = requestAnimationFrame(tick); }, 4000);   // after start-up work
+    return () => { cancelled = true; clearTimeout(begin); cancelAnimationFrame(raf); };
+  }, [lite]);
 
   let footerLeft = [];
 
@@ -305,7 +331,7 @@ function App() {
       <KeepAlive active={isIndex}>
           <IndexGrid
           cardMode={t.indexCardMode}
-          imageLimit={t.imageLimit}
+          imageLimit={t.imageLimit} lite={lite}
           locked={t.nodesLocked}
           onOpen={openProject}
           onHover={setHovered}
@@ -317,7 +343,7 @@ function App() {
       {isIndex && isMobile &&
       <IndexGrid
         cardMode={t.indexCardMode}
-        imageLimit={t.imageLimit}
+        imageLimit={t.imageLimit} lite={lite}
         locked={t.nodesLocked}
         onOpen={openProject}
         onHover={setHovered}

@@ -20,7 +20,7 @@ const OUT = path.join(ROOT, 'public');
 const SKIP = new Set(['.git', '.claude', '.vercel', 'node_modules', 'public', 'api', 'tools',
   'package.json', 'package-lock.json', 'vercel.json', 'supabase-setup.sql', 'README.md', '.gitignore', '.gitattributes']);
 
-await rm(OUT, { recursive: true, force: true });
+await rm(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });   // retries: files can be briefly locked on Windows/OneDrive
 await mkdir(path.join(OUT, 'build'), { recursive: true });
 
 const entries = await readdir(ROOT, { withFileTypes: true });
@@ -49,6 +49,7 @@ for (const e of entries) {
 async function measureImages() {
   const { default: sharp } = await import('sharp');
   const srcs = new Set();
+  let liveContent = null;
   const add = (c) => (c && c.projects || []).forEach((p) => (p.gallery || []).forEach((g) => {
     if (g && g.type === 'image' && g.src) srcs.add(g.src);
   }));
@@ -65,16 +66,32 @@ async function measureImages() {
     const r = await fetch(url.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data',
       { headers: { apikey: key, Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(10000) });
     const rows = await r.json();
-    add(rows && rows[0] && rows[0].data);
+    liveContent = rows && rows[0] && rows[0].data;
+    add(liveContent);
   } catch (e) { console.warn('image sizes: live content unavailable (' + e.message + ')'); }
 
-  const dims = {};
+  // bio "working on" hover images use the small copies too
+  const addBio = (c) => ((c && c.bio && c.bio.working) || []).forEach((w) => { if (w && w.img) srcs.add(w.img); });
+  try {
+    const vm = await import('node:vm');
+    const sandbox = { window: {} };
+    vm.runInNewContext(await readFile(path.join(ROOT, 'content.js'), 'utf8'), sandbox);
+    addBio(sandbox.window.SITE_CONTENT);
+  } catch (_) {}
+  if (liveContent) addBio(liveContent);
+
+  // Small copies: the projects page shows images ~250px wide, but the files
+  // are ~2000px — 8× the pixels to download, decode and hold in memory. A
+  // 640px WebP covers a 250px column on a high-density (2.5×) screen.
+  const THUMB_W = 640;
+  await mkdir(path.join(OUT, 'thumbs'), { recursive: true });
+  const dims = {}, thumbs = {};
   const list = [...srcs];
   const one = async (src) => {
     try {
       let buf;
       if (/^https?:\/\//i.test(src)) {
-        const r = await fetch(src, { headers: { Range: 'bytes=0-262143' }, signal: AbortSignal.timeout(15000) });
+        const r = await fetch(src, { signal: AbortSignal.timeout(30000) });
         if (!r.ok) return;
         buf = Buffer.from(await r.arrayBuffer());
       } else {
@@ -83,17 +100,26 @@ async function measureImages() {
       const m = await sharp(buf, { failOn: 'none' }).metadata();
       if (!m.width || !m.height) return;
       dims[src] = (m.orientation || 1) >= 5 ? [m.height, m.width] : [m.width, m.height];   // EXIF-rotated
-    } catch (_) { /* unknown size: the page just won't reserve space for it */ }
+      const animated = m.pages > 1;                           // GIF / animated WebP
+      if (animated) dims[src] = [m.width, m.pageHeight || m.height];
+      const name = 'thumbs/' + createHash('sha1').update(src).digest('hex').slice(0, 16) + '.webp';
+      // animated → animated WebP (keeps every frame; e.g. a 16.9 MB GIF → ~1.9 MB)
+      await sharp(buf, { failOn: 'none', animated }).rotate()
+        .resize({ width: Math.min(THUMB_W, dims[src][0]), withoutEnlargement: true })
+        .webp({ quality: animated ? 70 : 78 }).toFile(path.join(OUT, name));
+      thumbs[src] = name;
+    } catch (_) { /* unknown size / no copy: the page falls back to the original */ }
   };
-  for (let i = 0; i < list.length; i += 8) await Promise.all(list.slice(i, i + 8).map(one));
-  console.log('image sizes: measured ' + Object.keys(dims).length + ' of ' + list.length);
-  return dims;
+  for (let i = 0; i < list.length; i += 6) await Promise.all(list.slice(i, i + 6).map(one));
+  console.log('images: measured ' + Object.keys(dims).length + ' of ' + list.length +
+    ', made ' + Object.keys(thumbs).length + ' small copies');
+  return { dims, thumbs };
 }
 
 let dimsTag = '';
 try {
-  const dims = await measureImages();
-  const js = 'window.MEDIA_DIMS = ' + JSON.stringify(dims) + ';\n';
+  const { dims, thumbs } = await measureImages();
+  const js = 'window.MEDIA_DIMS = ' + JSON.stringify(dims) + ';\nwindow.MEDIA_THUMBS = ' + JSON.stringify(thumbs) + ';\n';
   await writeFile(path.join(OUT, 'media-dims.js'), js);
   dimsTag = '<script src="media-dims.js?v=' + createHash('sha1').update(js).digest('hex').slice(0, 10) + '"></script>\n';
 } catch (e) { console.warn('image sizes skipped: ' + e.message); }

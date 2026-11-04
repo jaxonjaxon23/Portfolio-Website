@@ -76,9 +76,9 @@ function topImageFor(p) {
   } catch (_) {}
   const ordered = order.map((i) => p.gallery[i]);
   const first = ordered[0];
-  if (first && first.type === 'image') return first.src;
+  if (first && first.type === 'image') return window.thumbFor ? window.thumbFor(first.src) : first.src;   // small preview copy
   const img = ordered.find((it) => it.type === 'image');
-  return img ? img.src : null;
+  return img ? (window.thumbFor ? window.thumbFor(img.src) : img.src) : null;
 }
 
 function loadPositions(projects) {
