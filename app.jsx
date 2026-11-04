@@ -156,6 +156,8 @@ const THEMES = ['dark', 'light', 'alarm'];
 const THEME_LABEL = { dark: 'Dark', light: 'Light', alarm: 'Alarm' };
 const THEME_ICON = { dark: '◑', light: '◐', alarm: '●' };
 
+const NO_HOVER = () => {};
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const isMobile = useMobile();
@@ -242,7 +244,10 @@ function App() {
   }, [view]);
 
   const go = navigate;
-  const openProject = (p) => navigate(p.id);
+  const openProject = React.useCallback((p) => navigate(p.id), []);   // stable: lets columns skip re-rendering
+  // The projects page only uses hover for its readout when title cards are off;
+  // otherwise every column crossed while scrolling re-rendered the whole page.
+  const indexHover = t.indexCardMode === 'off' ? setHovered : NO_HOVER;
 
   const project = view !== 'about' && view !== 'index' ?
   window.PROJECTS.find((p) => p.id === view) : null;
@@ -334,7 +339,7 @@ function App() {
           imageLimit={t.imageLimit} lite={lite}
           locked={t.nodesLocked}
           onOpen={openProject}
-          onHover={setHovered}
+          onHover={indexHover}
           isMobile={false}
           locationStyle={t.locationStyle} />
         </KeepAlive>
@@ -346,7 +351,7 @@ function App() {
         imageLimit={t.imageLimit} lite={lite}
         locked={t.nodesLocked}
         onOpen={openProject}
-        onHover={setHovered}
+        onHover={indexHover}
         isMobile={true}
         locationStyle={t.locationStyle} />
       }

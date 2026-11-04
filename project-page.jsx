@@ -278,13 +278,36 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
   const [dragOver, setDragOver] = usePPState(null);
   const galleryRef = usePPRef(null);
 
-  // (Vertical scrolling is the browser's own: its smooth wheel scrolling runs
-  // off the main thread. The old JS easing here caused micro-stutter.)
-  // Videos pause while the page scrolls and resume when it stops.
+  // Eased vertical wheel scrolling (same engine and feel as the projects
+  // board, in every browser). Videos pause while the page moves.
   usePPEffect(() => {
-    const onScroll = () => noteGalleryScroll(galleryRef.current);
+    const maxY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const scroller = createSmoothScroller(() => window.scrollY, (y) => window.scrollTo(0, y), maxY);
+    // let scrollable panels under the cursor (e.g. a long info panel) scroll natively
+    const nestedCanScroll = (el, dy) => {
+      for (; el && el !== document.body; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+          if (dy < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+        }
+      }
+      return false;
+    };
+    const onWheel = (e) => {
+      if (e.ctrlKey || window.LITE) return;                  // pinch-zoom / lite mode: native
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (nestedCanScroll(e.target, e.deltaY)) return;
+      e.preventDefault();
+      scroller.by(wheelPx(e.deltaY, e.deltaMode, window.innerHeight));
+    };
+    const onScroll = () => { scroller.sync(); noteGalleryScroll(galleryRef.current); };
+    window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('scroll', onScroll);
+      scroller.stop();
+    };
   }, [p.id]);
 
   const gallery = order.map((i) => p.gallery[i]);

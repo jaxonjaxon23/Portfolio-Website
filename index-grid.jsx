@@ -91,7 +91,7 @@ function ThumbGrid({ order, gallery, onReorder }) {
   );
 }
 
-function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager, near = true, lite = false }) {
+const ProjectColumn = React.memo(function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager, near = true, lite = false }) {
   const orderKey = 'gallery-order-' + p.id;
   const countKey  = 'preview-count-' + p.id;
 
@@ -194,7 +194,7 @@ function ProjectColumn({ p, cardMode, imageLimit, locked, onOpen, onHover, eager
       </div>
     </div>
   );
-}
+});
 
 function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = false, locationStyle, lite = false }) {
   const allProjects = window.PROJECTS;
@@ -221,19 +221,28 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   useIEffect(() => {
     const root = scrollRef.current;
     if (!root || typeof IntersectionObserver === 'undefined') return;
+    // Columns coming into range load at once; columns leaving range are only
+    // cleared once scrolling has stopped, so unloading never costs a frame mid-scroll.
+    const far = new Set();
+    let idle = 0;
+    const flushFar = () => {
+      if (!far.size) return;
+      const gone = [...far]; far.clear();
+      setNearCols((prev) => { const next = new Set(prev); gone.forEach((id) => next.delete(id)); return next; });
+    };
+    const onScroll = () => { clearTimeout(idle); idle = setTimeout(flushFar, 400); };
+    root.addEventListener('scroll', onScroll, { passive: true });
     const io = new IntersectionObserver((entries) => {
-      setNearCols((prev) => {
-        let next = null;
-        entries.forEach((e) => {
-          const id = e.target.getAttribute('data-col-id');
-          if (e.isIntersecting && !prev.has(id)) (next = next || new Set(prev)).add(id);
-          if (!e.isIntersecting && prev.has(id)) (next = next || new Set(prev)).delete(id);
-        });
-        return next || prev;
+      const add = [];
+      entries.forEach((e) => {
+        const id = e.target.getAttribute('data-col-id');
+        if (e.isIntersecting) { far.delete(id); add.push(id); } else far.add(id);
       });
+      if (add.length) setNearCols((prev) => add.every((id) => prev.has(id)) ? prev : new Set([...prev, ...add]));
+      clearTimeout(idle); idle = setTimeout(flushFar, 400);
     }, { root, rootMargin: '0px 150% 0px 150%' });
     root.querySelectorAll('[data-col-id]').forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    return () => { io.disconnect(); root.removeEventListener('scroll', onScroll); clearTimeout(idle); };
   }, [projectOrder]);
 
   const flashSaved = () => {
@@ -261,37 +270,27 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const liteRef = useIRef(lite);
   liteRef.current = lite;
 
-  // Vertical wheel → horizontal scroll; mouse drag to pan.
-  // The smoothing is left to the browser (scrollTo smooth), which animates on
-  // its compositor thread. The old per-frame JS easing ran on the main thread,
-  // so any image decode or paint there dropped a frame (measured: 19 slow
-  // frames per 5 s of scrolling vs 2 with the browser's own animation).
+  // Vertical wheel → eased horizontal scroll (createSmoothScroller, same in
+  // every browser); sideways trackpad swipes stay native; mouse drag to pan.
   useIEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    let target = el.scrollLeft, lastWheel = 0;
-    const stop = () => { target = el.scrollLeft; };
+    const scroller = createSmoothScroller(
+      () => el.scrollLeft, (x) => { el.scrollLeft = x; }, () => el.scrollWidth - el.clientWidth);
+    const stop = () => scroller.stop();
     const onWheel = (e) => {
       if (e.ctrlKey) return;            // let pinch-zoom through
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // sideways trackpad swipe: native
       e.preventDefault();
       const delta = wheelPx(e.deltaY, e.deltaMode, el.clientWidth);
-      const max = el.scrollWidth - el.clientWidth;
-      // trackpads / precise wheels send many small steps that are already
-      // smooth, and lite mode skips the animation: move directly
-      if (liteRef.current || (e.deltaMode === 0 && Math.abs(e.deltaY) < 50)) {
-        el.scrollLeft = Math.max(0, Math.min(max, el.scrollLeft + delta));
-        target = el.scrollLeft;
+      if (liteRef.current) {            // lite mode: move directly, no animation
+        el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + delta));
         return;
       }
-      const now = performance.now();
-      if (now - lastWheel > 300) target = el.scrollLeft;   // new gesture: start from where we are
-      lastWheel = now;
-      target = Math.max(0, Math.min(max, target + delta));
-      el.scrollTo({ left: target, behavior: 'smooth' });
+      scroller.by(delta);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    const onBoardScroll = () => noteGalleryScroll(el);   // pause videos while moving
+    const onBoardScroll = () => { scroller.sync(); noteGalleryScroll(el); };   // pause videos while moving
     el.addEventListener('scroll', onBoardScroll, { passive: true });
     let down = false, startX = 0, startScroll = 0;
     const onDown = (e) => {

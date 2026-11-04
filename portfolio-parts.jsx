@@ -71,9 +71,40 @@ const DISPLAY_FONT = "'BluuNext', Georgia, serif";
 // lines (deltaMode 1) or pages (2), e.g. 3 per notch, which would otherwise
 // move an eased scroller only a few pixels per notch.
 function wheelPx(delta, deltaMode, pageSize) {
-  if (deltaMode === 1) return delta * 40;
-  if (deltaMode === 2) return delta * pageSize;
+  if (deltaMode === 1) return delta * 40;          // Firefox: lines
+  if (deltaMode === 2) return delta * pageSize;    // pages
   return delta;
+}
+
+// ---------------------------------------------------------------- smooth scrolling
+// One eased scroll engine for every browser (Chrome, Safari, Firefox, Edge):
+// wheel input moves a target; each animation frame moves the real scroll
+// position a fraction of the way there. Frame-rate independent, so it feels
+// the same on 60 Hz and 120 Hz screens. Built-in smooth scrolling differs per
+// browser and restarts its animation on every wheel notch (felt as judder).
+// get/set read and write the scroll position (board: scrollLeft, page: scrollY).
+const SCROLL_EASE = 0.075;   // fraction per 60 fps frame: ~0.6 s glide; higher = snappier
+function createSmoothScroller(get, set, max) {
+  let pos = get(), target = pos, raf = 0, lastT = 0, writing = false;
+  const frame = (t) => {
+    const dt = lastT ? Math.min(64, t - lastT) : 16.667;
+    lastT = t;
+    pos += (target - pos) * (1 - Math.pow(1 - SCROLL_EASE, dt / 16.667));
+    if (Math.abs(target - pos) < 0.4) pos = target;
+    writing = true; set(pos); writing = false;
+    if (pos !== target) raf = requestAnimationFrame(frame);
+    else { raf = 0; lastT = 0; }
+  };
+  return {
+    by(delta) {
+      if (!raf) pos = target = get();             // start from wherever the page is
+      target = Math.max(0, Math.min(max(), target + delta));
+      if (!raf && target !== pos) raf = requestAnimationFrame(frame);
+    },
+    // something else moved it (scrollbar, keys, drag, touch): follow, don't fight
+    sync() { if (!writing && raf && Math.abs(get() - pos) > 2) { cancelAnimationFrame(raf); raf = 0; lastT = 0; pos = target = get(); } },
+    stop() { cancelAnimationFrame(raf); raf = 0; lastT = 0; pos = target = get(); },
+  };
 }
 
 const DEPTH_BG = 'images/about/depth-bg.png';
