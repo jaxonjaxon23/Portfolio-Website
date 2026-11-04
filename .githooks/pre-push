@@ -1,0 +1,19 @@
+#!/bin/sh
+# Runs before every `git push` — a push to main deploys the site — so a broken
+# build or a page with JavaScript errors never goes live. Takes ~2 minutes:
+# builds the site, then checks it in an invisible browser (tools/smoke-test.mjs).
+#   Turn on (once):  git config core.hooksPath .githooks
+#   Skip once:       git push --no-verify
+#   Turn off:        git config --unset core.hooksPath
+if ! command -v npm >/dev/null 2>&1; then
+  echo "pre-push: npm not found — skipping the site checks" >&2
+  exit 0
+fi
+echo "pre-push: building and checking the site (skip with git push --no-verify)..."
+npm run check --silent
+status=$?
+if [ $status -ne 0 ]; then
+  echo "" >&2
+  echo "pre-push: checks failed — nothing was pushed. Fix the issue above, or push anyway with: git push --no-verify" >&2
+fi
+exit $status

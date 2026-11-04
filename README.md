@@ -71,18 +71,34 @@ uptime pinger:
 
 ## How it fits together
 
-- `supabase-config.js` — your Supabase URL + anon key (you fill this in).
+- `supabase-config.js` — your Supabase URL + anon key.
 - `remote-content.js` — the site reads content from Supabase on load; falls back
   to the bundled `content.js` if Supabase is unreachable.
-- `content.js` — offline fallback snapshot of the content (safe to leave as-is).
+- `content.js` — fallback snapshot of the live content. Refreshed on every
+  deploy; `npm run snapshot` refreshes the repo copy.
+- `shared.js` — text rules (titles, image descriptions, links, credits) used by
+  both the site and the crawler pages in `api/`.
 - `admin*.{html,jsx}` — the CMS. Only you use it (sign-in required to save).
-- `index.html` + `.jsx`/`.js` — the site itself.
-- `supabase-setup.sql` — the one-time database setup.
+- `app.html` + `.jsx`/`.js` — the site itself; `api/` — crawler pages, sitemap,
+  llms.txt, share images and thumbnails (Vercel functions).
+- `tools/build.mjs` — the deploy build (`npm run build` → `public/`).
+- `supabase-setup.sql` — the database setup (owner-only writes, version history).
+
+## Checking changes before they go live
+
+- `npm run dev` — local preview of the source files; `npm run build` then
+  `node tools/dev-server.mjs --public` previews exactly what deploys.
+- `npm run check` — builds, then `npm test` checks the built site in an invisible
+  browser: every page renders with no JavaScript errors, the board scrolls
+  smoothly, crawler pages, sitemap, headers, CMS (~2 minutes).
+- Run it automatically before every push (a push deploys):
+  `git config core.hooksPath .githooks` — skip once with `git push --no-verify`.
+- `npm run icons` — rebuild the tab icons after editing `favicon.svg`.
 
 ## Notes
 
 - Must be served over http(s) (Vercel does this). Won't work by double-clicking
   `index.html` from disk.
 - The anon key is meant to be public; your data is protected by the security
-  rules in `supabase-setup.sql` (anyone can read, only your signed-in account can
-  write).
+  rules in `supabase-setup.sql` (anyone can read; only your account can write,
+  and every save keeps the previous version).

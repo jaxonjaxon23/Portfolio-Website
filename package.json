@@ -5,7 +5,10 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/dev-server.mjs",
-    "snapshot": "node tools/content-snapshot.mjs"
+    "snapshot": "node tools/content-snapshot.mjs",
+    "test": "node tools/smoke-test.mjs",
+    "check": "npm run build && npm test",
+    "icons": "node tools/make-icons.mjs"
   },
   "dependencies": {
     "sharp": "^0.35.5"

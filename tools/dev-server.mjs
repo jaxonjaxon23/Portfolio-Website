@@ -20,7 +20,7 @@ const cfg = JSON.parse(readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript',
   '.jsx': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.pdf': 'application/pdf', '.woff2': 'font/woff2' };
+  '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.pdf': 'application/pdf', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
 
 // "/work/:id" → { re, keys }
 function compile(source) {
@@ -37,8 +37,16 @@ function match(rule, pathname) {
   return dest;
 }
 
+// vercel.json "headers" (cache + security), applied like Vercel does: every
+// rule whose source matches the request path adds its headers
+const headerRules = (cfg.headers || []).map((h) => ({
+  // "(.*)" is a regex group in Vercel's syntax; any other "." is a literal dot
+  re: new RegExp('^' + h.source.split('(.*)').map((part) => part.replace(/[.]/g, '\\.').replace(/:(\w+)/g, '([^/]+?)')).join('(.*)') + '$'),
+  headers: h.headers }));
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  for (const r of headerRules) if (r.re.test(url.pathname)) r.headers.forEach((h) => res.setHeader(h.key, h.value));
   for (const r of cfg.redirects || []) {
     const d = match(r, url.pathname);
     if (d) { res.writeHead(r.permanent ? 308 : 307, { Location: d }); return res.end(); }
