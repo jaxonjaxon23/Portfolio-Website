@@ -97,9 +97,9 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="layout.js"></script>
 <script src="content.js"></script>
 <script src="credit-links.js"></script>
+<script src="shared.js"></script>
 <script src="projects.js"></script>
 <script src="debug-overlay.js"></script>
 <script src="supabase-config.js"></script>
@@ -150,19 +150,12 @@
     var GLOBAL_LIMIT = 6; // matches TWEAK_DEFAULTS.imageLimit
     var FIRST_COLUMNS = window.innerWidth < 768 ? 3 : 6;
     try {
-      var get = function (k) { try { return JSON.parse(window.layoutGet(k)); } catch (_) { return null; } };
-      var all = window.PROJECTS || [];
-      var colOrder = get('index-project-order-v1');
-      var cols = (Array.isArray(colOrder) && colOrder.length === all.length) ? colOrder.map(function (i) { return all[i]; }) : all;
-      cols.slice(0, FIRST_COLUMNS).forEach(function (p) {
+      // order, gallery order and preview counts all come from the CMS content
+      (window.PROJECTS || []).slice(0, FIRST_COLUMNS).forEach(function (p) {
         if (!p || !p.gallery) return;
-        var order = get('gallery-order-' + p.id);
-        if (!Array.isArray(order) || order.length !== p.gallery.length) order = p.gallery.map(function (_, i) { return i; });
-        var count = parseInt(window.layoutGet('preview-count-' + p.id), 10);
-        if (!(count > 0)) count = GLOBAL_LIMIT;
+        var count = p.previewCount > 0 ? p.previewCount : GLOBAL_LIMIT;
         if (window.LITE) count = Math.min(count, window.LITE_IMAGES || 2);
-        order.slice(0, count).forEach(function (i) {
-          var g = p.gallery[i];
+        p.gallery.slice(0, count).forEach(function (g) {
           // the projects page shows the small copies — preload those
           if (g && g.type === 'image' && g.src) urls.push(window.thumbFor ? window.thumbFor(g.src) : g.src);
         });

@@ -12,27 +12,6 @@ const SB = (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase)
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
-// layout.js carries index-based order permutations (Index column order and
-// per-project gallery order) that the live site applied ON TOP of the content,
-// so reordering in the CMS came out scrambled. Fold them into the data once so
-// the editor shows what visitors actually see; the saved doc is then flagged
-// `ordersBaked` and the site stops applying them.
-function bakeLegacyOrders(c) {
-  const B = window.BAKED_LAYOUT || {};
-  const perm = (key, arr) => {
-    try {
-      const s = JSON.parse(B[key]);
-      const valid = Array.isArray(s) && s.length === arr.length && new Set(s).size === arr.length
-        && s.every((i) => Number.isInteger(i) && i >= 0 && i < arr.length);
-      if (valid) return s.map((i) => arr[i]);
-    } catch (_) {}
-    return arr;
-  };
-  const projects = perm('index-project-order-v1', c.projects || [])
-    .map((p) => ({ ...p, gallery: perm('gallery-order-' + p.id, p.gallery || []) }));
-  return { ...c, projects };
-}
-
 const fmtBytes = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB';
 
 const friendlySaveError = (msg) => {
@@ -86,11 +65,14 @@ function Login({ onOk }) {
 function App() {
   const [authed, setAuthed] = useMState(false);
   const [authReady, setAuthReady] = useMState(!SB);
-  const [content, setContent] = useMState(() => bakeLegacyOrders(clone(window.SITE_CONTENT)));
+  // starts from content.js (a snapshot of the live content) until the live copy loads
+  const [content, setContent] = useMState(() => {
+    const c = clone(window.SITE_CONTENT);
+    return { location: c.location || {}, bio: c.bio || {}, projects: c.projects || [] };
+  });
   const [positions, setPositions] = useMState(() => {
-    // start from baked diagram positions, fill any missing from defaults
-    let baked = {};
-    try { baked = JSON.parse((window.BAKED_LAYOUT && window.BAKED_LAYOUT['diagram-node-pos-v1']) || '{}'); } catch (_) {}
+    // saved diagram positions, any missing filled from the defaults
+    const baked = window.SITE_CONTENT.positions || {};
     const map = {};
     (window.SITE_CONTENT.projects || []).forEach((p, i) => { map[p.id] = baked[p.id] || window.defaultPosFor(i); });
     return map;
@@ -99,7 +81,7 @@ function App() {
   // Large-entity offset { dx, dy } from the info bubble (null = default spot).
   // Older { left, top } saves are from a layout the site no longer uses → null.
   const [entityPos, setEntityPos] = useMState(() => {
-    try { return window.normEntityPos(JSON.parse((window.BAKED_LAYOUT && window.BAKED_LAYOUT['large-entity-pos-v2']) || 'null')); } catch (_) { return null; }
+    return window.normEntityPos(window.SITE_CONTENT.entityPos);
   });
   const [, force] = useMState(0);
   const rerender = () => force((n) => n + 1);
@@ -142,7 +124,6 @@ function App() {
       let c = (d.location || d.bio || d.projects)
         ? { location: d.location || {}, bio: d.bio || {}, projects: Array.isArray(d.projects) ? d.projects : [] }
         : clone(window.SITE_CONTENT);
-      if (!d.ordersBaked) c = bakeLegacyOrders(c);
       if (d.positions) pos = { ...positions, ...d.positions };
       if ('entityPos' in d) ent = window.normEntityPos(d.entityPos);
       setContent(c); setPositions(pos); setEntityPos(ent);

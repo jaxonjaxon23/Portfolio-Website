@@ -4,7 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "build": "node tools/build.mjs",
-    "dev": "node tools/dev-server.mjs"
+    "dev": "node tools/dev-server.mjs",
+    "snapshot": "node tools/content-snapshot.mjs"
   },
   "dependencies": {
     "sharp": "^0.35.5"

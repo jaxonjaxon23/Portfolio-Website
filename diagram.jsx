@@ -1,7 +1,7 @@
 // diagram.jsx — the About/landing constellation diagram from Figma frame 3.
 // A conceptual plot: vertical axis CURSED↔BLESSED, horizontal axis FOR US↔FOR OUR ENEMIES,
-// a large crosshair, and 16 white project nodes. Nodes hover→readout, click→project.
-// When unlocked (authoring), nodes drag freely; positions persist in localStorage.
+// a large crosshair, and white project nodes. Nodes hover→readout and link to
+// their project. Node positions are set in the CMS ("Diagram" tab).
 // Exposes window.AboutDiagram
 
 const { useState: useDState, useRef: useDRef, useCallback: useDCallback } = React;
@@ -40,7 +40,6 @@ const AXIS = {
   xLeg:  { y: FY(947), x1: FX(998), x2: FX(1253.5) },    // FOR US(left) / FOR OUR ENEMIES(right)
 };
 
-const STORAGE_KEY = 'diagram-node-pos-v1';
 
 // deterministic per-id offset so each node's hover-image sits at a fixed random angle,
 // far enough out that the image never overlaps the node's glow.
@@ -67,26 +66,19 @@ function centerOffset(pt) {
   return { dx: (pxX / len) * dist, dy: (pxY / len) * dist };
 }
 
-// first image shown at the top of this project's index stack (respects saved reorder)
+// first image of the project (its gallery order is set in the CMS), as the small copy
 function topImageFor(p) {
-  let order = p.gallery.map((_, i) => i);
-  try {
-    const s = JSON.parse(window.layoutGet('gallery-order-' + p.id));
-    if (Array.isArray(s) && s.length === p.gallery.length) order = s;
-  } catch (_) {}
-  const ordered = order.map((i) => p.gallery[i]);
-  const first = ordered[0];
-  if (first && first.type === 'image') return window.thumbFor ? window.thumbFor(first.src) : first.src;   // small preview copy
-  const img = ordered.find((it) => it.type === 'image');
+  const img = (p.gallery || []).find((it) => it.type === 'image');
   return img ? (window.thumbFor ? window.thumbFor(img.src) : img.src) : null;
 }
 
+// node positions saved in the CMS (percent of the screen), else the defaults
 function loadPositions(projects) {
-  let saved = {};
-  try { saved = JSON.parse(window.layoutGet(STORAGE_KEY)) || {}; } catch (_) {}
+  const saved = (window.SITE_CONTENT && window.SITE_CONTENT.positions) || {};
   const map = {};
   projects.forEach((p, i) => {
-    map[p.id] = saved[p.id] || DEFAULT_NODES[i % DEFAULT_NODES.length];
+    const s = saved[p.id];
+    map[p.id] = s && typeof s.x === 'number' && typeof s.y === 'number' ? s : DEFAULT_NODES[i % DEFAULT_NODES.length];
   });
   return map;
 }
@@ -180,11 +172,9 @@ function EndDot({ x, y }) {
   );
 }
 
-function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = false }) {
-  const [pos, setPos] = useDState(() => loadPositions(projects));
-  const dragId = useDRef(null);
+function AboutDiagram({ projects, onHover, hoveredId, mobile = false }) {
+  const [pos] = useDState(() => loadPositions(projects));
   const layerRef = useDRef(null);
-  const movedRef = useDRef(false);
   const nodeRefs = useDRef({});
   const labelRef = useDRef(null);
   const posRef = useDRef(pos);
@@ -197,7 +187,7 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
   // rAF (one getBoundingClientRect per frame, zero React re-renders per move) so
   // it stays smooth on low-end machines even with the WebGL backdrop running.
   React.useEffect(() => {
-    if (!locked || mobile) return;
+    if (mobile) return;
     const PROX = 190, LABEL_R = 110;
     let raf = null, active = false;
     const cursor = { x: 0, y: 0 };
@@ -257,37 +247,7 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
       window.removeEventListener('scroll', invalidate);
       if (raf != null) cancelAnimationFrame(raf);
     };
-  }, [locked, mobile, projects]);
-
-  const persist = (next) => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (_) {}
-  };
-
-  const onPointerDown = useDCallback((e, id) => {
-    if (locked) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragId.current = id;
-    movedRef.current = false;
-  }, [locked]);
-
-  React.useEffect(() => {
-    if (locked) return;
-    const onMove = (e) => {
-      if (!dragId.current || !layerRef.current) return;
-      const r = layerRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
-      const y = Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100));
-      movedRef.current = true;
-      setPos((prev) => ({ ...prev, [dragId.current]: { x, y } }));
-    };
-    const onUp = () => {
-      if (dragId.current) { dragId.current = null; setPos((p) => { persist(p); return p; }); }
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, [locked]);
+  }, [mobile, projects]);
 
   const lineCol = 'rgba(255,255,255,0.85)';
   const label = {
@@ -331,23 +291,22 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
       {projects.map((p) => {
         const pt = pos[p.id] || { x: 50, y: 50 };
         return (
-          <div
-            key={p.id}
+          <ViewLink
+            key={p.id} to={p.id}
+            aria-label={window.SiteShared.displayTitle(p.title) + (p.year ? ' (' + p.year + ')' : '')}
             ref={(el) => { nodeRefs.current[p.id] = el; }}
-            data-clickable={locked ? '' : undefined}
-            onMouseEnter={() => locked && onHover(p)}
-            onMouseLeave={() => locked && onHover(null)}
-            onMouseDown={(e) => onPointerDown(e, p.id)}
-            onClick={() => { if (locked && !movedRef.current) onOpen(p); }}
+            onMouseEnter={() => onHover(p)}
+            onMouseLeave={() => onHover(null)}
+            onFocus={() => onHover(p)}
+            onBlur={() => onHover(null)}
             style={{
               position: 'absolute', left: pt.x + '%', top: pt.y + '%',
               width: 13, height: 13, marginLeft: -6.5, marginTop: -6.5,
               borderRadius: '50%',
               background: 'rgb(217,217,217)',
-              cursor: locked ? 'pointer' : 'grab',
-              pointerEvents: 'auto',
+              display: 'block', pointerEvents: 'auto',
               willChange: 'transform',
-              transition: dragId.current === p.id ? 'none' : 'transform .12s ease-out, box-shadow .12s ease-out, background .12s ease-out',
+              transition: 'transform .12s ease-out, box-shadow .12s ease-out, background .12s ease-out',
             }}
           />
         );
@@ -375,18 +334,8 @@ function AboutDiagram({ projects, locked, onOpen, onHover, hoveredId, mobile = f
         return <HoverImage src={firstImg} pt={pt} off={off} />;
       })()}
 
-      {/* ---- unlocked hint ---- */}
-      {!locked && (
-        <div style={{
-          position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)',
-          fontFamily: FONT, fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)',
-          background: 'rgba(0,0,0,0.55)', padding: '6px 14px', borderRadius: 20,
-          pointerEvents: 'none', textTransform: 'uppercase',
-        }}>Unlocked — drag nodes to position, then lock in Tweaks</div>
-      )}
     </div>
   );
 }
 
 window.AboutDiagram = AboutDiagram;
-window.resetDiagramPositions = function () { try { localStorage.removeItem(STORAGE_KEY); } catch (_) {} };

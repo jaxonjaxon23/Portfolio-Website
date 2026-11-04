@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const shared = require('../shared.js');   // same text rules as the site
 
 const SITE = 'https://www.jaxonstickler.com';
 const ROOT = process.cwd();
@@ -32,30 +33,6 @@ function bundledContent() {
   } catch (_) { return null; }
 }
 
-// Same ordering rules as the site: until the CMS has saved with ordersBaked,
-// layout.js's index/gallery permutations still apply on top of the content.
-function bakedOrders(content) {
-  let B = {};
-  try {
-    const sandbox = { window: {} };
-    vm.runInNewContext(read('layout.js'), sandbox, { timeout: 1000 });
-    B = sandbox.window.BAKED_LAYOUT || {};
-  } catch (_) { return content; }
-  const perm = (key, arr) => {
-    try {
-      const s = JSON.parse(B[key]);
-      if (Array.isArray(s) && s.length === arr.length && new Set(s).size === arr.length &&
-          s.every((i) => Number.isInteger(i) && i >= 0 && i < arr.length)) return s.map((i) => arr[i]);
-    } catch (_) {}
-    return arr;
-  };
-  return {
-    ...content,
-    projects: perm('index-project-order-v1', content.projects || [])
-      .map((p) => ({ ...p, gallery: perm('gallery-order-' + p.id, p.gallery || []) })),
-  };
-}
-
 async function loadContent() {
   let data = null, updatedAt = null;
   const cfg = supabaseConfig();
@@ -77,9 +54,8 @@ async function loadContent() {
   let content;
   if (data && (data.bio || data.projects)) {
     content = { location: data.location || {}, bio: data.bio || {}, projects: Array.isArray(data.projects) ? data.projects : [] };
-    if (!data.ordersBaked) content = bakedOrders(content);
   } else {
-    content = bakedOrders(bundledContent() || { location: {}, bio: {}, projects: [] });
+    content = bundledContent() || { location: {}, bio: {}, projects: [] };   // snapshot of the live content
   }
   return { content, updatedAt };
 }
@@ -87,25 +63,20 @@ async function loadContent() {
 // ---------------------------------------------------------------- text helpers
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-// "[label](url)" → "label"
-const plain = (s) => String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+const plain = shared.plain;
 const paras = (s) => plain(s).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 const oneLine = (s, n) => {
   const t = plain(s).replace(/\s+/g, ' ').trim();
   return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t;
 };
-// Titles are stored in caps; readable case for prose (keeps short acronyms like BC/USB)
-const titleCase = (s) => (s && s === s.toUpperCase())
-  ? s.replace(/[A-Z]+/g, (w) => (w.length <= 3 && !/^(ME|MY|OF|THE|AND|TO|IN|ON|A|AN|OR|FOR|AT|BY|IS|IT)$/.test(w))
-    ? w : w[0] + w.slice(1).toLowerCase())
-  : (s || '');
+const titleCase = shared.displayTitle;
 const abs = (src) => { try { return new URL(src, SITE + '/').href; } catch (_) { return ''; } };
 const projectUrl = (p) => SITE + '/work/' + encodeURIComponent(p.id);
 const images = (p) => (p.gallery || []).filter((g) => g && g.type === 'image' && g.src);
 const credits = (p) => [p.year, plain(p.client), plain(p.collab)].map((x) => (x || '').trim()).filter(Boolean);
 const artist = (c) => (c.bio && c.bio.name) || 'Jaxon Stickler';
 // image description: the CMS caption, else "<Project> by <name> — image N" (same as the site)
-const altText = (c, p, g) => (g && g.alt) || (titleCase(p.title) + ' by ' + artist(c) + ' — image ' + ((p.gallery || []).indexOf(g) + 1));
+const altText = (c, p, g) => shared.altText(p.title, artist(c), g, (p.gallery || []).indexOf(g));
 
 // Instagram + the "Other profiles" CMS field (one URL per line; not shown on the site)
 function profiles(c) {
@@ -143,14 +114,8 @@ function mdToHtml(md) {
   return out.join('');
 }
 
-// Client / collaborator credits as HTML with links — same rules as CreditText
-// on the site: names from the project's creditLinks, "@handle" → Instagram,
-// and [text](url).
-function creditUrl(u) {
-  u = String(u || '').trim();
-  if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
-  return /^https?:\/\//i.test(u) ? u : 'https://' + u;
-}
+// Client / collaborator credits as HTML with links (same rules as the site's
+// CreditText — both come from shared.js)
 let suggestedCredits = null;
 function suggested() {
   if (!suggestedCredits) {
@@ -162,34 +127,9 @@ function suggested() {
   }
   return suggestedCredits;
 }
-// CMS "Credit links" plus credit-links.js (the CMS wins for the same name)
-function creditLinks(p) {
-  const own = (p.creditLinks || []).filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim());   // blank CMS rows don't block
-  const taken = new Set(own.map((l) => String(l.name).trim().toLowerCase()));
-  const all = own.concat((suggested()[p.id] || []).filter((l) => !taken.has(String(l.name).trim().toLowerCase())));
-  return all.filter((l) => l && l.name && String(l.name).trim() && l.url && String(l.url).trim())
-    .map((l) => ({ name: String(l.name).trim(), url: creditUrl(l.url) }))
-    .sort((a, b) => b.name.length - a.name.length);
-}
-function creditHtml(text, p) {
-  text = String(text || '').trim();
-  const named = creditLinks(p);
-  const rx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp('\\[([^\\]]+)\\]\\(([^)]+)\\)' +
-    '|(' + (named.length ? named.map((l) => rx(l.name)).join('|') : '(?!)') + ')' +   // group 3 = a credited name
-    '|(@[A-Za-z0-9._]*[A-Za-z0-9_])', 'gi');
-  let out = '', last = 0, m;
-  while ((m = re.exec(text)) !== null) {
-    out += esc(text.slice(last, m.index));
-    let label = m[0], href;
-    if (m[1]) { label = m[1]; href = creditUrl(m[2]); }
-    else if (m[3]) { const hit = named.find((l) => l.name.toLowerCase() === m[3].toLowerCase()); href = hit && hit.url; }
-    else href = creditUrl(m[0]);
-    out += href ? '<a href="' + esc(href) + '" rel="noopener">' + esc(label) + '</a>' : esc(label);
-    last = m.index + m[0].length;
-  }
-  return out + esc(text.slice(last));
-}
+const creditLinks = (p) => shared.creditLinks(p, suggested());
+const creditHtml = (text, p) => shared.creditParts(text, creditLinks(p))
+  .map((x) => x.href ? '<a href="' + esc(x.href) + '" rel="noopener">' + esc(x.text) + '</a>' : esc(x.text)).join('');
 
 module.exports = { SITE, read, loadContent, esc, plain, paras, oneLine, titleCase, abs, projectUrl, images, credits,
   artist, altText, profiles, cvText, ogImage, mdToHtml, creditHtml, creditLinks };

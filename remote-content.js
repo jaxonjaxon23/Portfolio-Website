@@ -12,57 +12,32 @@
 
 (function () {
   var CACHE_KEY = 'remote-content-cache-v1';
-  // Index-based order permutations from layout.js. Once the CMS has saved
-  // ordering into the content itself (data.ordersBaked), these would scramble
-  // it, so they are dropped.
-  var ORDER_KEY_RE = /^(index-project-order-v1|gallery-order-)/;
 
+  // The CMS content is the single source of truth: text, images, order, widths,
+  // preview counts, diagram node positions and the large entity's offset.
   function apply(data) {
     if (!data || typeof data !== 'object') return;
-    if (data.location || data.bio || data.projects) {
-      window.SITE_CONTENT = {
-        location: data.location || (window.SITE_CONTENT && window.SITE_CONTENT.location) || {},
-        bio:      data.bio      || (window.SITE_CONTENT && window.SITE_CONTENT.bio)      || {},
-        projects: Array.isArray(data.projects) ? data.projects
-                 : ((window.SITE_CONTENT && window.SITE_CONTENT.projects) || []),
-      };
-      window.PROJECTS = window.SITE_CONTENT.projects;
-    }
-    // diagram node positions + entity position live in the layout system.
-    // Supabase is the source of truth: clear any stale LOCAL override so a
-    // browser that previously nudged something by hand doesn't shadow what
-    // was saved from the CMS (this is what makes edits global, not per-device).
-    window.BAKED_LAYOUT = window.BAKED_LAYOUT || {};
-    if (data.positions && typeof data.positions === 'object') {
-      window.BAKED_LAYOUT['diagram-node-pos-v1'] = JSON.stringify(data.positions);
-      try { localStorage.removeItem('diagram-node-pos-v1'); } catch (_) {}
-    }
-    // Large entity: an offset { dx, dy } from the info bubble's corner (what the
-    // site reads as 'large-entity-pos-v2'). null = the default spot. Older saves
-    // used { left, top } in a coordinate system the site no longer has; those
-    // are ignored, so the entity stays where it is today.
-    if ('entityPos' in data) {
-      var ep = data.entityPos;
-      if (ep && typeof ep.dx === 'number' && typeof ep.dy === 'number') {
-        window.BAKED_LAYOUT['large-entity-pos-v2'] = JSON.stringify({ dx: ep.dx, dy: ep.dy });
-        try { localStorage.removeItem('large-entity-pos-v2'); } catch (_) {}
-      } else if (ep === null) {
-        delete window.BAKED_LAYOUT['large-entity-pos-v2'];
-        try { localStorage.removeItem('large-entity-pos-v2'); } catch (_) {}
-      }
-    }
-    if (data.ordersBaked) {
-      Object.keys(window.BAKED_LAYOUT).forEach(function (k) {
-        if (ORDER_KEY_RE.test(k)) delete window.BAKED_LAYOUT[k];
-      });
-      try {
-        for (var i = localStorage.length - 1; i >= 0; i--) {
-          var k = localStorage.key(i);
-          if (k && ORDER_KEY_RE.test(k)) localStorage.removeItem(k);
-        }
-      } catch (_) {}
-    }
+    if (!(data.location || data.bio || data.projects)) return;
+    var cur = window.SITE_CONTENT || {};
+    window.SITE_CONTENT = {
+      location:  data.location || cur.location || {},
+      bio:       data.bio || cur.bio || {},
+      projects:  Array.isArray(data.projects) ? data.projects : (cur.projects || []),
+      positions: data.positions || cur.positions || {},
+      entityPos: 'entityPos' in data ? data.entityPos : (cur.entityPos || null),
+    };
+    window.PROJECTS = window.SITE_CONTENT.projects;
   }
+
+  // Leftovers from the old in-page editing tools (orders, preview counts,
+  // positions saved in this browser). Nothing reads them any more.
+  try {
+    var OLD = /^(diagram-node-pos|gallery-order-|preview-count-|index-project-order|project-column-order|large-entity-pos|project-links-|image-sizes-|gallery-widths-)/;
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+      var k = localStorage.key(i);
+      if (k && OLD.test(k)) localStorage.removeItem(k);
+    }
+  } catch (_) {}
 
   function done() {
     window.__remoteReady = true;

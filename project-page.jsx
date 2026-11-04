@@ -1,185 +1,37 @@
-// project-page.jsx — single project: info panel + reorderable/resizable gallery.
+// project-page.jsx — single project: info panel + gallery.
+// Order, image widths (item.w) and links all come from the CMS content.
 // Exposes window.ProjectPage
 
-const { useState: usePPState, useRef: usePPRef, useEffect: usePPEffect } = React;
+const { useEffect: usePPEffect } = React;
 
-// Only web, email and on-site links become clickable: a typed-in
-// "javascript:" (or similar) link would run code when clicked.
-function safeHref(u) {
-  u = String(u || '').trim();
-  if (/^(https?:|mailto:)/i.test(u)) return u;
-  if (/^[\/#?]/.test(u) && !/^\/\//.test(u)) return u;        // /work/x, #id, ?q
-  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return null;             // any other scheme
-  return /^[\w-]+(\.[\w-]+)+([\/?#].*)?$/.test(u) ? 'https://' + u : null;   // bare domain
+const LINK_STYLE = { color: '#8FB8FF', textDecoration: 'underline', textUnderlineOffset: 2 };
+
+// Text parts → React: [{ text, href? }] from shared.js (safe links only)
+function Linked({ parts }) {
+  return (
+    <span style={{ whiteSpace: 'pre-wrap' }}>
+      {parts.map((x, i) => x.href
+        ? <a key={i} href={x.href} target="_blank" rel="noopener" data-clickable style={LINK_STYLE}>{x.text}</a>
+        : <React.Fragment key={i}>{x.text}</React.Fragment>)}
+    </span>);
 }
 
-// Parse [text](url) markdown links inline
+// Description: [text](url) links inline
 function RichText({ text }) {
   if (!text) return null;
-  const parts = [];
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let last = 0, m;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    const href = safeHref(m[2]);
-    parts.push(!href ? m[1] :
-      <a key={m.index} href={href} target="_blank" rel="noopener" data-clickable
-        style={{ color: '#8FB8FF', textDecoration: 'underline', textUnderlineOffset: 2 }}>{m[1]}</a>
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return <span style={{ whiteSpace: 'pre-wrap' }}>{parts}</span>;
+  return <Linked parts={window.SiteShared.richParts(text)} />;
 }
 
-// Client / collaborator credits. Names listed in the project's "Credit links"
-// (CMS) become links wherever they appear, "@handle" links to Instagram, and
-// [text](url) still works. Mirrors creditHtml() in api/_site.js.
-function creditUrl(u) {
-  u = (u || '').trim();
-  if (/^@[\w.]+$/.test(u)) return 'https://instagram.com/' + u.slice(1);
-  return /^https?:\/\//i.test(u) ? u : 'https://' + u;
-}
-// CMS "Credit links" plus the confirmed ones in credit-links.js (the CMS wins
-// when both have the same name)
-function projectCredits(p) {
-  const own = (p.creditLinks || []).filter((l) => l && l.name && l.name.trim() && l.url && l.url.trim());   // blank CMS rows don't block
-  const taken = new Set(own.map((l) => l.name.trim().toLowerCase()));
-  const suggested = ((window.SUGGESTED_CREDITS || {})[p.id] || []).filter((l) => !taken.has(l.name.trim().toLowerCase()));
-  return own.concat(suggested);
-}
-function CreditText({ text, links }) {
-  text = (text || '').trim();
-  if (!text) return null;
-  const named = (links || []).filter((l) => l && l.name && l.name.trim() && l.url && l.url.trim())
-    .map((l) => ({ name: l.name.trim(), url: creditUrl(l.url) }))
-    .sort((a, b) => b.name.length - a.name.length);           // longest name first
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(
-    '\\[([^\\]]+)\\]\\(([^)]+)\\)' +
-    '|(' + (named.length ? named.map((l) => esc(l.name)).join('|') : '(?!)') + ')' +   // group 3 = a credited name
-    '|(@[A-Za-z0-9._]*[A-Za-z0-9_])', 'gi');
-  const linkStyle = { color: '#8FB8FF', textDecoration: 'underline', textUnderlineOffset: 2 };
-  const parts = [];
-  let last = 0, m;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    let label = m[0], href;
-    if (m[1]) { label = m[1]; href = creditUrl(m[2]); }
-    else if (m[3]) { const hit = named.find((l) => l.name.toLowerCase() === m[3].toLowerCase()); href = hit && hit.url; }
-    else href = creditUrl(m[0]);
-    parts.push(href
-      ? <a key={m.index} href={href} target="_blank" rel="noopener" data-clickable style={linkStyle}>{label}</a>
-      : label);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return <span style={{ whiteSpace: 'pre-wrap' }}>{parts}</span>;
+// Client / collaborator credits: names from the project's CMS "Credit links"
+// (plus credit-links.js) become links wherever they appear, "@handle" links to
+// Instagram, and [text](url) still works. Same rules as the crawler pages.
+function CreditText({ text, project }) {
+  if (!text || !String(text).trim()) return null;
+  const links = window.SiteShared.creditLinks(project, window.SUGGESTED_CREDITS);
+  return <Linked parts={window.SiteShared.creditParts(text, links)} />;
 }
 
-// Compact thumbnail grid for quick reordering (shown in info panel when unlocked)
-function ReorderGrid({ order, gallery, onReorder }) {
-  const [dragFrom, setDragFrom] = usePPState(null);
-  const [dragOver, setDragOver] = usePPState(null);
-
-  const onDrop = (e, idx) => {
-    e.preventDefault();
-    if (dragFrom === null || dragFrom === idx) { setDragFrom(null); setDragOver(null); return; }
-    const next = [...order];
-    const [moved] = next.splice(dragFrom, 1);
-    next.splice(idx, 0, moved);
-    onReorder(next);
-    setDragFrom(null); setDragOver(null);
-  };
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 10, opacity: 0.4, marginBottom: 6, letterSpacing: '0.06em' }}>DRAG TO REORDER</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {order.map((origIdx, dispIdx) => {
-          const item = gallery[origIdx];
-          const isImg = item && item.type === 'image';
-          return (
-            <div key={origIdx} draggable
-              onDragStart={() => setDragFrom(dispIdx)}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(dispIdx); }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={(e) => onDrop(e, dispIdx)}
-              onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
-              style={{
-                width: 54, height: 40, cursor: 'grab', position: 'relative',
-                overflow: 'hidden', borderRadius: 3, flexShrink: 0,
-                opacity: dragFrom === dispIdx ? 0.25 : 1,
-                outline: dragOver === dispIdx && dragFrom !== dispIdx
-                  ? '2px solid rgba(255,255,255,0.8)' : '1px solid rgba(255,255,255,0.12)',
-              }}>
-              {isImg
-                ? <img src={item.src} draggable="false"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt="" />
-                : <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.07)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>
-                    {item && item.type === 'vimeo' ? 'vimeo' : 'vid'}
-                  </div>
-              }
-              <div style={{
-                position: 'absolute', bottom: 1, right: 2, fontSize: 8,
-                color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', lineHeight: 1,
-              }}>{dispIdx + 1}</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Resize drag handle (bottom-right of each gallery item)
-function ResizeHandle({ onMouseDown }) {
-  return (
-    <div onMouseDown={onMouseDown} draggable="false"
-      style={{
-        position: 'absolute', bottom: 6, right: 6, width: 18, height: 18,
-        cursor: 'ew-resize', background: 'rgba(255,255,255,0.22)',
-        borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 5, userSelect: 'none',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.5)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.22)'; }}
-    >
-      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-        <line x1="1" y1="4" x2="9" y2="4" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-        <polyline points="6,1.5 9,4 6,6.5" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    </div>
-  );
-}
-
-function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, galleryRef, mobile = false }) {
-  const linksKey = 'project-links-' + p.id;
-  const [extraLinks, setExtraLinks] = usePPState(() => {
-    try { return JSON.parse(window.layoutGet(linksKey)) || []; } catch (_) { return []; }
-  });
-  const [linkLabel, setLinkLabel] = usePPState('');
-  const [linkUrl, setLinkUrl]   = usePPState('');
-
-  const saveLinks = (next) => {
-    setExtraLinks(next);
-    try { localStorage.setItem(linksKey, JSON.stringify(next)); } catch (_) {}
-  };
-  const addLink = () => {
-    if (!linkUrl.trim()) return;
-    saveLinks([...extraLinks, { label: linkLabel.trim() || linkUrl.trim(), url: linkUrl.trim() }]);
-    setLinkLabel(''); setLinkUrl('');
-  };
-  const removeLink = (i) => saveLinks(extraLinks.filter((_, j) => j !== i));
-
-  const inputStyle = {
-    background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)',
-    borderRadius: 4, color: '#fff', fontSize: 11, padding: '4px 8px',
-    width: '100%', fontFamily: FONT, outline: 'none', marginBottom: 4,
-  };
-
+function ProjectInfo({ p, top, mobile = false }) {
   return (
     <div style={mobile ? {
       position: 'relative', width: '100%', boxSizing: 'border-box',
@@ -193,19 +45,19 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
       padding: '22px 24px', fontFamily: FONT, color: '#fff',
       fontSize: 12, lineHeight: 1.5, zIndex: 24,
     }}>
-      <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 15, lineHeight: 1.2, letterSpacing: '0.02em' }}>{p.title}</div>
+      <h1 style={{ margin: 0, fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 15, lineHeight: 1.2, letterSpacing: '0.02em' }}>{p.title}</h1>
       <div>{p.year}</div>
       {p.medium && (
         <div style={{ opacity: 0.7, marginTop: 12 }}>[{p.medium}]</div>
       )}
       {p.client && (
         <div style={{ opacity: 0.6, marginTop: 6 }}>
-          Client: <CreditText text={p.client} links={projectCredits(p)} />
+          Client: <CreditText text={p.client} project={p} />
         </div>
       )}
       {p.collab && (
         <div style={{ opacity: 0.6, marginTop: 2 }}>
-          Collaborators: <CreditText text={p.collab} links={projectCredits(p)} />
+          Collaborators: <CreditText text={p.collab} project={p} />
         </div>
       )}
       {p.desc && (
@@ -213,82 +65,24 @@ function ProjectInfo({ p, top, locked, order, onReorder, sizes, onStartResize, g
           <RichText text={p.desc} />
         </div>
       )}
-
-      {/* Project-data links */}
       {p.links && p.links.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          {p.links.map((l, i) => (
-            <div key={i}>
-              <a href={safeHref(l.url) || undefined} target="_blank" rel="noopener" data-clickable
-                style={{ color: '#8FB8FF', textDecoration: 'underline', fontSize: 12 }}>{l.label || l.url}</a>
-            </div>
-          ))}
+          {p.links.map((l, i) => {
+            const href = window.SiteShared.safeHref(l.url);
+            return (
+              <div key={i}>
+                {href
+                  ? <a href={href} target="_blank" rel="noopener" data-clickable style={{ ...LINK_STYLE, fontSize: 12 }}>{l.label || l.url}</a>
+                  : <span>{l.label || l.url}</span>}
+              </div>);
+          })}
         </div>
-      )}
-
-      {/* Author-added extra links */}
-      {extraLinks.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          {extraLinks.map((l, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <a href={safeHref(l.url) || undefined} target="_blank" rel="noopener" data-clickable
-                style={{ color: '#8FB8FF', textDecoration: 'underline', fontSize: 12, flex: 1, wordBreak: 'break-all' }}>{l.label}</a>
-              {!locked && (
-                <span onClick={() => removeLink(i)}
-                  style={{ cursor: 'pointer', opacity: 0.4, fontSize: 11, userSelect: 'none', flexShrink: 0 }}>×</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Authoring tools (shown when unlocked) */}
-      {!locked && (
-        <React.Fragment>
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontSize: 10, opacity: 0.4, marginBottom: 6, letterSpacing: '0.06em' }}>ADD LINK</div>
-            <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)}
-              placeholder="Label" style={inputStyle} />
-            <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://…" style={inputStyle} onKeyDown={(e) => e.key === 'Enter' && addLink()} />
-            <button data-clickable onClick={addLink}
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.18)',
-                borderRadius: 4, color: '#fff', fontSize: 11, padding: '4px 14px',
-                cursor: 'pointer', fontFamily: FONT }}>Add</button>
-          </div>
-
-          {p.gallery && p.gallery.length > 1 && (
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ fontSize: 10, opacity: 0.4, letterSpacing: '0.06em' }}>REORDER IMAGES</div>
-              <ReorderGrid order={order} gallery={p.gallery} onReorder={onReorder} />
-            </div>
-          )}
-        </React.Fragment>
       )}
     </div>
   );
 }
 
-function ProjectPage({ p, locationStyle, locked, mobile = false }) {
-  const orderKey = 'gallery-order-' + p.id;
-  const sizesKey = 'gallery-widths-' + p.id;
-
-  const [order, setOrder] = usePPState(() => {
-    try {
-      const saved = JSON.parse(window.layoutGet(orderKey));
-      if (Array.isArray(saved) && saved.length === p.gallery.length) return saved;
-    } catch (_) {}
-    return p.gallery.map((_, i) => i);
-  });
-
-  const [sizes, setSizes] = usePPState(() => {
-    try { return JSON.parse(window.layoutGet(sizesKey)) || {}; } catch (_) { return {}; }
-  });
-
-  const [dragFrom, setDragFrom] = usePPState(null);
-  const [dragOver, setDragOver] = usePPState(null);
-  const galleryRef = usePPRef(null);
-
+function ProjectPage({ p, locationStyle, mobile = false }) {
   // Eased vertical wheel scrolling (same engine and feel as the projects
   // board, in every browser).
   usePPEffect(() => {
@@ -321,41 +115,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
     };
   }, [p.id]);
 
-  const gallery = order.map((i) => p.gallery[i]);
-
-  const handleReorder = (next) => {
-    setOrder(next);
-    try { localStorage.setItem(orderKey, JSON.stringify(next)); } catch (_) {}
-  };
-
-  const onDrop = (e, idx) => {
-    e.preventDefault();
-    if (dragFrom === null || dragFrom === idx) { setDragFrom(null); setDragOver(null); return; }
-    const next = [...order];
-    const [moved] = next.splice(dragFrom, 1);
-    next.splice(idx, 0, moved);
-    handleReorder(next);
-    setDragFrom(null); setDragOver(null);
-  };
-
-  const startResize = (origIdx, e) => {
-    e.stopPropagation(); e.preventDefault();
-    const container = galleryRef.current;
-    if (!container) return;
-    const containerW = container.offsetWidth;
-    const startX = e.clientX;
-    const startPct = sizes[origIdx] != null ? sizes[origIdx] : 100;
-    const onMove = (me) => {
-      const dx = me.clientX - startX;
-      const newPct = Math.max(15, Math.min(100, startPct + (dx / containerW) * 100));
-      const next = { ...sizes, [origIdx]: Math.round(newPct) };
-      setSizes(next);
-      try { localStorage.setItem(sizesKey, JSON.stringify(next)); } catch (_) {}
-    };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
+  const gallery = p.gallery || [];
 
   if (mobile) {
     return (
@@ -364,21 +124,13 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
           <BioShort locationStyle={locationStyle} mobile contact={false} />
           <window.MobileEntityAnchor which="small" />
         </div>
-        <ProjectInfo
-          p={p} top={0} locked={locked} mobile
-          order={order} onReorder={handleReorder}
-          sizes={sizes} onStartResize={startResize}
-          galleryRef={galleryRef}
-        />
-        <div ref={galleryRef} style={{ padding: '12px 16px', paddingBottom: 80 }}>
-          {gallery.map((item, displayIdx) => {
-            const origIdx = order[displayIdx];
-            return (
-              <div key={origIdx} style={{ marginBottom: 10 }}>
-                <GalleryItem item={item} rounded eager={displayIdx < 2} />
-              </div>
-            );
-          })}
+        <ProjectInfo p={p} top={0} mobile />
+        <div style={{ padding: '12px 16px', paddingBottom: 80 }}>
+          {gallery.map((item, i) => (
+            <div key={i} style={{ marginBottom: 10 }}>
+              <GalleryItem item={item} rounded eager={i < 2} />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -387,44 +139,14 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
   return (
     <div>
       <BioShort locationStyle={locationStyle} top={19} contact={false} />
-      <ProjectInfo
-        p={p} top={252} locked={locked}
-        order={order} onReorder={handleReorder}
-        sizes={sizes} onStartResize={startResize}
-        galleryRef={galleryRef}
-      />
-
-      <div ref={galleryRef}
-        style={{ marginLeft: 408, marginRight: 24, marginInlineStart: 'auto', paddingTop: 19, paddingBottom: 120, maxWidth: 1180 }}>
-        {gallery.map((item, displayIdx) => {
-          const origIdx = order[displayIdx];
-          const widthPct = item.w != null ? item.w : (sizes[origIdx] != null ? sizes[origIdx] : 100);
-          return (
-            <div
-              key={origIdx}
-              draggable={!locked}
-              onDragStart={!locked ? () => setDragFrom(displayIdx) : undefined}
-              onDragOver={!locked ? (e) => { e.preventDefault(); setDragOver(displayIdx); } : undefined}
-              onDragLeave={!locked ? () => setDragOver(null) : undefined}
-              onDrop={!locked ? (e) => onDrop(e, displayIdx) : undefined}
-              onDragEnd={!locked ? () => { setDragFrom(null); setDragOver(null); } : undefined}
-              style={{
-                marginBottom: 14,
-                width: widthPct + '%',
-                marginLeft: 'auto',
-                position: 'relative',
-                cursor: !locked ? (dragFrom !== null ? 'grabbing' : 'grab') : 'default',
-                opacity: !locked && dragFrom === displayIdx ? 0.35 : 1,
-                outline: !locked && dragOver === displayIdx && dragFrom !== null && dragFrom !== displayIdx
-                  ? '1px solid rgba(255,255,255,0.45)' : '1px solid transparent',
-                transition: 'opacity 0.15s ease, outline-color 0.1s ease',
-              }}
-            >
-              <GalleryItem item={item} eager={displayIdx < 2} />
-              {!locked && <ResizeHandle onMouseDown={(e) => startResize(origIdx, e)} />}
-            </div>
-          );
-        })}
+      <ProjectInfo p={p} top={252} />
+      <div style={{ marginLeft: 408, marginRight: 24, marginInlineStart: 'auto', paddingTop: 19, paddingBottom: 120, maxWidth: 1180 }}>
+        {gallery.map((item, i) => (
+          // width: the CMS's per-image size (100% = full gallery width)
+          <div key={i} style={{ marginBottom: 14, width: (item.w != null ? item.w : 100) + '%', marginLeft: 'auto', position: 'relative' }}>
+            <GalleryItem item={item} eager={i < 2} />
+          </div>
+        ))}
       </div>
     </div>
   );

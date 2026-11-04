@@ -20,6 +20,7 @@ import { transform as esbuild } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fetchLiveContent, contentJs } from './content-snapshot.mjs';
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, 'public');
@@ -27,6 +28,11 @@ const hash = (s, n = 10) => createHash('sha1').update(s).digest('hex').slice(0, 
 // never deployed as static files
 const SKIP = new Set(['.git', '.claude', '.vercel', 'node_modules', 'public', 'api', 'tools',
   'package.json', 'package-lock.json', 'vercel.json', 'supabase-setup.sql', 'README.md', '.gitignore', '.gitattributes']);
+
+// the live CMS content: the deployed content.js fallback is refreshed from it,
+// and every image it uses gets measured and copied (step 3)
+let live = null;
+try { live = await fetchLiveContent(); } catch (e) { console.warn('live content unavailable (' + e.message + ') — using the repo content.js'); }
 
 await rm(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });   // retries: files can be briefly locked on Windows/OneDrive
 await mkdir(path.join(OUT, 'build'), { recursive: true });
@@ -52,6 +58,8 @@ for (const e of entries) {
   await cp(src, path.join(OUT, e.name), { recursive: true });
 }
 
+if (live) await writeFile(path.join(OUT, 'content.js'), contentJs(live));
+
 // ---- 3: image sizes and smaller copies ----------------------------------------
 // Every image the site shows (live CMS content + bundled content.js), so the
 // page can reserve each image's shape before it loads, and show a copy no
@@ -71,16 +79,7 @@ async function processImages() {
     vm.runInNewContext(await readFile(path.join(ROOT, 'content.js'), 'utf8'), sandbox);
     addGallery(sandbox.window.SITE_CONTENT); addBio(sandbox.window.SITE_CONTENT);
   } catch (_) {}
-  try {
-    const cfg = await readFile(path.join(ROOT, 'supabase-config.js'), 'utf8');
-    const url = (/SUPABASE_URL\s*=\s*['"]([^'"]+)['"]/.exec(cfg) || [])[1];
-    const key = (/SUPABASE_ANON_KEY\s*=\s*['"]([^'"]+)['"]/.exec(cfg) || [])[1];
-    const r = await fetch(url.replace(/\/+$/, '') + '/rest/v1/content?id=eq.1&select=data',
-      { headers: { apikey: key, Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(10000) });
-    const rows = await r.json();
-    const live = rows && rows[0] && rows[0].data;
-    addGallery(live); addBio(live);
-  } catch (e) { console.warn('images: live content unavailable (' + e.message + ')'); }
+  if (live) { addGallery(live); addBio(live); }
 
   const THUMB_W = 640;          // covers a 250px board column on a 2.5x screen
   const SIZES = [1280, 1920];   // project pages: phones/1x laptops, then larger screens
@@ -175,7 +174,8 @@ await writeFile(path.join(OUT, vendorName), vendor);
   for (const p of parts) {
     const code = p.src === 'tweaks-panel.jsx'
       ? await readFile(path.join(ROOT, 'tools', 'tweaks-stub.js'), 'utf8')
-      : p.code != null ? p.code : await readFile(path.join(ROOT, p.src), 'utf8');
+      : p.code != null ? p.code
+      : await readFile(path.join(p.src === 'content.js' ? OUT : ROOT, p.src), 'utf8');   // content.js: the fresh snapshot
     chunks.push('/* ' + p.src + ' */\n' + code + '\n;');
     if (p.src === 'content.js') chunks.push('/* media sizes (build) */\n' + mediaJs);
   }

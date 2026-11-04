@@ -40,18 +40,13 @@ if (location.hash.length > 1) {
   try { history.replaceState(null, '', pathForView(viewFromLocation())); } catch (_) {}
 }
 
-// Titles are stored in caps; readable case for page titles and image descriptions
-// (short acronyms like BC/USB/OSA stay in caps). Mirrors api/_site.js.
-function displayTitle(s) {
-  if (!s || s !== s.toUpperCase()) return s || '';
-  return s.replace(/[A-Z]+/g, (w) => (w.length <= 3 && !/^(ME|MY|OF|THE|AND|TO|IN|ON|A|AN|OR|FOR|AT|BY|IS|IT)$/.test(w))
-    ? w : w[0] + w.slice(1).toLowerCase());
-}
+// Readable titles (stored in caps) — shared with the crawler pages (shared.js)
+const displayTitle = window.SiteShared.displayTitle;
 function artistName() {
   return (window.SITE_CONTENT && window.SITE_CONTENT.bio && window.SITE_CONTENT.bio.name) || 'Jaxon Stickler';
 }
 
-// Image description (alt text): the CMS caption if set, otherwise
+// Image description (alt text): the CMS caption, else
 // "<Project> by <name> — image N" (N = position in the project's gallery).
 const defaultAlts = new WeakMap();
 function altFor(item) {
@@ -59,11 +54,26 @@ function altFor(item) {
   if (item.alt) return item.alt;
   if (!defaultAlts.has(item)) {
     (window.PROJECTS || []).forEach((p) => (p.gallery || []).forEach((g, i) => {
-      if (g && typeof g === 'object') defaultAlts.set(g, displayTitle(p.title) + ' by ' + artistName() + ' — image ' + (i + 1));
+      if (g && typeof g === 'object') defaultAlts.set(g, window.SiteShared.altText(p.title, artistName(), g, i));
     }));
   }
   return defaultAlts.get(item) || '';
 }
+
+// A real link to a page of the site (/, /about, /work/<id>): opens in a new
+// tab with Ctrl/Cmd/middle-click, can be copied, and crawlers can follow it.
+// A plain click switches the view in place without reloading the page.
+const ViewLink = React.forwardRef(function ViewLink({ to, children, style, ...rest }, ref) {
+  const onClick = (e) => {
+    if (rest.onClick) rest.onClick(e);
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigate(to);
+  };
+  return <a {...rest} ref={ref} href={pathForView(to)} onClick={onClick} draggable="false" data-clickable=""
+    style={{ color: 'inherit', textDecoration: 'none', ...style }}>{children}</a>;
+});
+
 // BluuNext (Velvetyne, OFL) — name + project titles. Files in assets/fonts/bluunext.
 const DISPLAY_FONT = "'BluuNext', Georgia, serif";
 
@@ -401,7 +411,6 @@ function BubbleNav() {
   const isProject = cur && cur !== 'index' && cur !== 'about';
   const mobile = window.innerWidth < 768;
   const graphic = window.__navGraphic;
-  const go = navigate;
   const btn = (active) => ({
     fontFamily: FONT, color: '#fff', fontSize: 12, letterSpacing: '0.02em',
     background: 'none', border: 'none', padding: 0, cursor: 'pointer',
@@ -410,14 +419,14 @@ function BubbleNav() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, minHeight: 18 }}>
       {!mobile
-        ? <button data-clickable style={btn(cur === 'about')} onClick={() => go('about')}>About</button>
+        ? <ViewLink to="about" style={btn(cur === 'about')} aria-current={cur === 'about' ? 'page' : undefined}>About</ViewLink>
         : <span style={{ width: 1 }} />}
       <span aria-hidden style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18 }}>
         {graphic
           ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22V13"/><path d="M12 13c0-5-6-8-10-7 0 5 4 8 10 7"/><path d="M12 13c0-5 6-8 10-7 0 5-4 8-10 7"/></svg>
           : <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span>}
       </span>
-      <button data-clickable style={btn(cur === 'index')} onClick={() => go('index')}>Projects</button>
+      <ViewLink to="index" style={btn(cur === 'index')} aria-current={cur === 'index' ? 'page' : undefined}>Projects</ViewLink>
     </div>
   );
 }
@@ -626,116 +635,34 @@ function AnimatedEntity() {
 
 }
 
-// Large entity — About page only. Now the ANIMATED overlay (living tendrils),
+// Large entity — About page only: the animated overlay (living tendrils),
 // flipped 180° and sitting in FRONT of the info bubble (z 28 > bubble z 25).
-// Rendered in an iframe wrapped by a draggable div (an iframe would otherwise
-// swallow the drag); the iframe is sized so its 90vh SVG lands at ~503×712.
-// Draggable when positions are unlocked; position persists in localStorage.
 // Anchored to the floating info bubble (fixed at left:24, top:19, width:345),
-// NOT to the viewport — so the entity hugs the UI identically on every screen
-// size instead of drifting with viewport height. Stored position is an OFFSET
-// from the bubble's top-left corner.
-const LARGE_ENTITY_KEY = 'large-entity-pos-v2';
+// not the viewport, so it hugs the UI identically on every screen size. Its
+// offset { dx, dy } from the bubble's corner is set in the CMS ("Entity
+// position"); the Tweaks sliders add a further nudge through CSS variables.
 const BUBBLE_ANCHOR = { left: 24, top: 19 };
 const LARGE_ENTITY_DEFAULT = { dx: -64, dy: 106 };
 
-function LargeEntity({ locked = true }) {
+function LargeEntity() {
   const isMob = useMobile();
-  // {dx,dy} offset from the bubble's top-left; null → default offset
-  const [pos, setPos] = usePState(() => {
-    try {
-      const s = JSON.parse(window.layoutGet(LARGE_ENTITY_KEY));
-      if (s && typeof s.dx === 'number' && typeof s.dy === 'number') return s;
-    } catch (_) {}
-    return null;
-  });
-  const dragRef = usePRef(null);
-  const elRef = usePRef(null);
-
-  usePEffect(() => {
-    if (locked) return;
-    const onMove = (e) => {
-      const d = dragRef.current;
-      if (!d) return;
-      setPos({ dx: e.clientX - d.offX - BUBBLE_ANCHOR.left, dy: e.clientY - d.offY - BUBBLE_ANCHOR.top });
-    };
-    const onUp = () => {
-      if (dragRef.current) {
-        dragRef.current = null;
-        setPos((p) => {try {localStorage.setItem(LARGE_ENTITY_KEY, JSON.stringify(p));} catch (_) {}return p;});
-      }
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {window.removeEventListener('mousemove', onMove);window.removeEventListener('mouseup', onUp);};
-  }, [locked]);
-
-  const onDown = (e) => {
-    if (locked) return;
-    e.preventDefault();
-    const r = elRef.current.getBoundingClientRect();
-    dragRef.current = { offX: e.clientX - r.left, offY: e.clientY - r.top };
-  };
-
-  const nudge = (dx, dy) => {
-    setPos((p) => {
-      const base = p || LARGE_ENTITY_DEFAULT;
-      const next = { dx: base.dx + dx, dy: base.dy + dy };
-      try { localStorage.setItem(LARGE_ENTITY_KEY, JSON.stringify(next)); } catch (_) {}
-      return next;
-    });
-  };
-  const resetPos = () => {
-    setPos(null);
-    try { localStorage.removeItem(LARGE_ENTITY_KEY); } catch (_) {}
-  };
-
   if (isMob) return null;
+  const e = window.SITE_CONTENT && window.SITE_CONTENT.entityPos;
+  const pos = e && typeof e.dx === 'number' && typeof e.dy === 'number' ? e : LARGE_ENTITY_DEFAULT;
   return (
-    <div ref={elRef} onMouseDown={onDown}
-    style={{
+    <div style={{
       position: 'fixed',
-      // Offsets come from the Tweaks sliders as CSS vars (fall back to the
-      // dragged/stored position, then the default) — a var change repositions
-      // without re-rendering the 1300-path SVG.
-      left: 'calc(' + (BUBBLE_ANCHOR.left + (pos ? pos.dx : LARGE_ENTITY_DEFAULT.dx)) + 'px + var(--le-dx, 0px))',
-      top: 'calc(' + (BUBBLE_ANCHOR.top + (pos ? pos.dy : LARGE_ENTITY_DEFAULT.dy)) + 'px + var(--le-dy, 0px))',
+      left: 'calc(' + (BUBBLE_ANCHOR.left + pos.dx) + 'px + var(--le-dx, 0px))',
+      top: 'calc(' + (BUBBLE_ANCHOR.top + pos.dy) + 'px + var(--le-dy, 0px))',
       width: 560, height: 792,
       transform: 'rotate(180deg)', transformOrigin: 'center',
-      zIndex: 28,
-      pointerEvents: locked ? 'none' : 'auto',
-      cursor: locked ? 'default' : 'grab',
-      opacity: 0.8,
-      outline: locked ? 'none' : '1px dashed rgba(255,255,255,0.35)',
-      outlineOffset: 4
+      zIndex: 28, pointerEvents: 'none', opacity: 0.8,
     }}>
       <EntityCanvas url="entities/vector-entity-2.html"
       style={{ width: '100%', height: '100%', pointerEvents: 'none' }} />
-      {!locked &&
-      <div onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%) rotate(180deg)',
-          display: 'grid', gridTemplateColumns: 'repeat(3, 30px)', gap: 3, pointerEvents: 'auto',
-        }}>
-          <span />
-          <button onClick={() => nudge(0, -8)} style={nudgeBtnStyle}>▲</button>
-          <span />
-          <button onClick={() => nudge(-8, 0)} style={nudgeBtnStyle}>◀</button>
-          <button onClick={resetPos} title="Reset position" style={{ ...nudgeBtnStyle, fontSize: 10 }}>↺</button>
-          <button onClick={() => nudge(8, 0)} style={nudgeBtnStyle}>▶</button>
-          <span />
-          <button onClick={() => nudge(0, 8)} style={nudgeBtnStyle}>▼</button>
-          <span />
-        </div>}
     </div>);
 
 }
-const nudgeBtnStyle = {
-  width: 30, height: 30, borderRadius: 6, border: '1px solid rgba(255,255,255,0.35)',
-  background: 'rgba(0,0,0,0.75)', color: '#fff', cursor: 'pointer', fontSize: 12, lineHeight: 1,
-};
-
-LargeEntity.reset = function () {try {localStorage.removeItem(LARGE_ENTITY_KEY);} catch (_) {}};
 
 // Memoize the persistent, prop-stable pieces so hovering a diagram node (which
 // updates state up in App) doesn't reconcile the WebGL canvas or the animation
@@ -743,7 +670,6 @@ LargeEntity.reset = function () {try {localStorage.removeItem(LARGE_ENTITY_KEY);
 const DepthCloudMemo = React.memo(DepthCloud);
 const AnimatedEntityMemo = React.memo(AnimatedEntity);
 const LargeEntityMemo = React.memo(LargeEntity);
-LargeEntityMemo.reset = LargeEntity.reset;
 const BioAboutMemo = React.memo(BioAbout);
 
 // Mobile-only entity anchors: small badges pinned to a bubble's corner,
@@ -781,7 +707,7 @@ function MobileEntityAnchor({ which }) {
 }
 
 Object.assign(window, {
-  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer, MobileEntityAnchor,
+  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer, MobileEntityAnchor, ViewLink,
   DepthCloud: DepthCloudMemo,
   AnimatedEntity: AnimatedEntityMemo,
   LargeEntity: LargeEntityMemo,

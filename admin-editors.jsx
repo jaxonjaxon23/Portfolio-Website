@@ -300,6 +300,9 @@ function CreditLinksEditor({ links, onChange }) {
   );
 }
 
+// the site's default when a project doesn't set one (imageLimit in app.jsx)
+const DEFAULT_PREVIEW_COUNT = 6;
+
 function ProjectEditor({ project, imgMap, onPatch, onAddImages, onDelete }) {
   const set = (k, v) => onPatch({ [k]: v });
   return (
@@ -316,6 +319,12 @@ function ProjectEditor({ project, imgMap, onPatch, onAddImages, onDelete }) {
       <Field label="Client / context (optional)"><Text value={project.client} onChange={(v) => set('client', v)} /></Field>
       <Field label="Medium / materials (optional)"><Area value={project.medium} rows={2} onChange={(v) => set('medium', v)} /></Field>
       <Field label="Keywords"><KeywordsEditor value={project.keywords} onChange={(v) => set('keywords', v)} /></Field>
+      <Field label="Images on the projects page"
+        hint={"How many of this project's images show in its column on the projects page, from the top of the gallery below. Leave blank for the default (" + DEFAULT_PREVIEW_COUNT + ")."}>
+        <input className="cms-input" type="number" min="1" max={(project.gallery || []).length || undefined} style={{ width: 120 }}
+          value={project.previewCount || ''} placeholder={String(DEFAULT_PREVIEW_COUNT)}
+          onChange={(e) => { const n = parseInt(e.target.value, 10); set('previewCount', n > 0 ? n : undefined); }} />
+      </Field>
       <Field label="Description" hint="Blank lines create paragraph breaks.">
         <Area value={project.desc} rows={7} onChange={(v) => set('desc', v)} />
       </Field>
