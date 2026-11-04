@@ -279,7 +279,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
   const galleryRef = usePPRef(null);
 
   // Eased vertical wheel scrolling (same engine and feel as the projects
-  // board, in every browser). Videos pause while the page moves.
+  // board, in every browser).
   usePPEffect(() => {
     const maxY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     const scroller = createSmoothScroller(() => window.scrollY, (y) => window.scrollTo(0, y), maxY);
@@ -300,7 +300,7 @@ function ProjectPage({ p, locationStyle, locked, mobile = false }) {
       e.preventDefault();
       scroller.by(wheelPx(e.deltaY, e.deltaMode, window.innerHeight));
     };
-    const onScroll = () => { scroller.sync(); noteGalleryScroll(galleryRef.current); };
+    const onScroll = () => scroller.sync();
     window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {

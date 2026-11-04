@@ -242,13 +242,8 @@ void main() {
     const onMove = (e) => setTarget(e.clientX, e.clientY);
     if (!IS_TOUCH) window.addEventListener('mousemove', onMove);
 
-    // Hold the background still while anything on the page scrolls (capture
-    // catches scrollable elements too, e.g. the projects board), so scrolling
-    // gets the GPU to itself; the glow picks up again just after.
-    let holdUntil = 0;
-    const onScrollish = () => { holdUntil = performance.now() + 200; };
-    window.addEventListener('scroll', onScrollish, { capture: true, passive: true });
-    window.addEventListener('wheel', onScrollish, { passive: true });
+    // (The light keeps wandering while the page scrolls: the projects board
+    // now slides as a GPU layer, so scrolling no longer competes with it.)
     // touch listeners are deliberately NOT attached on touch devices: dragging
     // to scroll would otherwise drive the torch and force constant redraws
 
@@ -325,7 +320,6 @@ void main() {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;          // pause GPU work when tab/page not visible
       watch(t);
-      if (t < holdUntil) return;            // page is scrolling — keep the last frame
       if (t - lastDraw < minDelta) return;  // cap frame rate for low-end smoothness
 
       const drifting = !interacting && tier.drift && START.drift > 0;
@@ -357,8 +351,6 @@ void main() {
       cancelAnimationFrame(raf);
       clearTimeout(idleTimer);
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('scroll', onScrollish, { capture: true });
-      window.removeEventListener('wheel', onScrollish);
       window.removeEventListener('resize', onResize);
       wake = null;
     };

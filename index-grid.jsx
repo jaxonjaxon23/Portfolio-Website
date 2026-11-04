@@ -213,6 +213,16 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const [savedToast, setSavedToast] = useIState(false);
   const scrollRef = useIRef(null);
   const toastTimer = useIRef(null);
+  const trackRef = useIRef(null);     // the row of columns
+  const barRef = useIRef(null);       // custom scrollbar (glide mode)
+  const thumbRef = useIRef(null);
+  // Glide mode (desktop with mouse/trackpad): instead of scrolling the board,
+  // the row of columns slides as one GPU layer (CSS transform) by fractional
+  // pixels. Native scrolling rounds to whole pixels, so the slow end of a
+  // glide stepped 1px, 0px, 0px, 1px… (visible judder at a perfect 60 fps),
+  // and every scrolled frame had to repaint the board. Touch screens keep
+  // native scrolling for its momentum.
+  const glide = !isMobile && !(navigator.maxTouchPoints > 0);
 
   // Columns load their images once within ~1.5 screens of the view (so they're
   // ready before they appear) and swap them for same-size placeholders only
@@ -279,9 +289,115 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const liteRef = useIRef(lite);
   liteRef.current = lite;
 
-  // Vertical wheel → eased horizontal scroll (createSmoothScroller, same in
-  // every browser); sideways trackpad swipes stay native; mouse drag to pan.
+  // ---- glide mode: the row slides as one GPU layer (see `glide` above) ----
+  // Wheel (either axis), trackpad, click-drag, scrollbar drag and arrow keys
+  // all move a target; each frame the row eases toward it by a fractional
+  // amount. At rest it snaps to the nearest device pixel so text stays crisp.
   useIEffect(() => {
+    if (!glide) return;
+    const el = scrollRef.current, track = trackRef.current, bar = barRef.current, thumb = thumbRef.current;
+    if (!el || !track) return;
+    let x = 0, target = 0, raf = 0, lastT = 0, max = 0, ease = SCROLL_EASE;
+    let barW = 0, thumbW = 0;            // cached sizes: frames only write, never read layout
+    const dpr = () => window.devicePixelRatio || 1;
+    const drawBar = () => {
+      if (thumb) thumb.style.transform = 'translate3d(' + (max > 0 ? (barW - thumbW) * (x / max) : 0) + 'px,0,0)';
+    };
+    const apply = () => {
+      track.style.transform = 'translate3d(' + (-x) + 'px,0,0)';
+      el.__glideX = x;                      // (read by tests / debug)
+      drawBar();
+    };
+    const frame = (t) => {
+      const dt = lastT ? Math.min(64, t - lastT) : 16.667;
+      lastT = t;
+      x += (target - x) * (1 - Math.pow(1 - ease, dt / 16.667));
+      const settled = Math.abs(target - x) < 0.05;
+      if (settled) x = Math.round(target * dpr()) / dpr();   // crisp at rest
+      apply();
+      if (settled) { raf = 0; lastT = 0; } else raf = requestAnimationFrame(frame);
+    };
+    const go = () => { if (!raf) raf = requestAnimationFrame(frame); };
+    const clamp = (v) => Math.max(0, Math.min(max, v));
+    const by = (delta, e) => { ease = e; target = clamp(target + delta); go(); };
+    const jump = (v) => { cancelAnimationFrame(raf); raf = 0; lastT = 0; x = target = clamp(v); apply(); };
+    const measure = () => {
+      const full = track.offsetWidth || 1;
+      max = Math.max(0, full - el.clientWidth);
+      if (bar && thumb) {
+        barW = bar.clientWidth;
+        thumbW = max > 0 ? Math.max(40, barW * el.clientWidth / full) : 0;
+        thumb.style.width = thumbW + 'px';
+        bar.style.display = max > 0 ? '' : 'none';
+      }
+      target = clamp(target); x = clamp(x); apply();
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(track); ro.observe(el);
+    measure();
+
+    const onWheel = (e) => {
+      if (e.ctrlKey) return;                                   // pinch-zoom
+      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      const raw = horizontal ? e.deltaX : e.deltaY;
+      if (!raw) return;
+      e.preventDefault();
+      const delta = wheelPx(raw, e.deltaMode, el.clientWidth);
+      // trackpads send many small, fractional steps: follow them closely;
+      // mouse wheels send big notches: glide softly
+      const trackpad = e.deltaMode === 0 && (Math.abs(raw) < 40 || raw % 1 !== 0 || horizontal);
+      by(delta, trackpad ? 0.35 : SCROLL_EASE);
+    };
+    let dragging = null;   // { from: 'board' | 'bar', x0, start }
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      if (bar && bar.contains(e.target)) {
+        const r = bar.getBoundingClientRect(), tw = thumbW;
+        const onThumb = thumb.contains(e.target);
+        if (!onThumb) jump(((e.clientX - r.left - tw / 2) / Math.max(1, r.width - tw)) * max);   // click track: jump there
+        dragging = { from: 'bar', x0: e.clientX, start: x };
+        e.preventDefault();
+        return;
+      }
+      if (e.target.closest && (e.target.closest('[data-clickable]') || e.target.closest('[data-col-handle]'))) return;
+      dragging = { from: 'board', x0: e.clientX, start: x };
+      el.style.cursor = 'grabbing';
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - dragging.x0;
+      if (dragging.from === 'bar') {
+        const W = barW - thumbW;
+        jump(dragging.start + (W > 0 ? dx / W * max : 0));
+      } else jump(dragging.start - dx);
+    };
+    const onUp = () => { dragging = null; el.style.cursor = ''; };
+    const onKey = (e) => {
+      if (!el.offsetParent || e.target.closest && e.target.closest('input, textarea, select')) return;   // index hidden / typing
+      const page = el.clientWidth * 0.8;
+      const step = { ArrowRight: 160, ArrowLeft: -160, PageDown: page, PageUp: -page }[e.key];
+      if (step) { e.preventDefault(); by(step, SCROLL_EASE); }
+      else if (e.key === 'Home') { e.preventDefault(); by(-target, SCROLL_EASE); }
+      else if (e.key === 'End') { e.preventDefault(); by(max - target, SCROLL_EASE); }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      cancelAnimationFrame(raf); ro.disconnect();
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [glide]);
+
+  // ---- native mode (touch screens): eased wheel scrolling, drag to pan ----
+  useIEffect(() => {
+    if (glide) return;
     const el = scrollRef.current;
     if (!el) return;
     const scroller = createSmoothScroller(
@@ -296,7 +412,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
       scroller.by(wheelPx(e.deltaY, e.deltaMode, el.clientWidth));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    const onBoardScroll = () => { scroller.sync(); noteGalleryScroll(el); };   // pause videos while moving
+    const onBoardScroll = () => scroller.sync();
     el.addEventListener('scroll', onBoardScroll, { passive: true });
     let down = false, startX = 0, startScroll = 0;
     const onDown = (e) => {
@@ -319,7 +435,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
       window.removeEventListener('mouseup', onUp);
       stop();
     };
-  }, []);
+  }, [glide]);
 
   // Mobile: the bio card fills the first screen, so on a visitor's first visit
   // slide the board right to reveal a project, then back — shows it scrolls.
@@ -367,15 +483,16 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     // Mobile: horizontal only, as originally designed. Desktop: overflowY auto
     // keeps tall columns reachable on short laptop screens.
     <div ref={scrollRef} style={{
-      position: 'fixed', inset: 0, overflowX: 'auto', overflowY: isMobile ? 'hidden' : 'auto',
+      position: 'fixed', inset: 0, overflowX: glide ? 'hidden' : 'auto', overflowY: isMobile ? 'hidden' : 'auto',
       backgroundColor: 'var(--board-bg, rgba(8,9,10,0.62))', // thinned in alarm mode (app.html)
       backgroundImage: 'radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)',
       backgroundSize: '26px 26px', cursor: 'grab',
     }}>
-      <div style={{
+      <div ref={trackRef} style={{
         display: 'flex', alignItems: 'flex-start', gap: isMobile ? 20 : 60,
         padding: isMobile ? '20px 24px 80px 16px' : '40px 56px 80px 408px',
         minHeight: '100%', width: 'max-content',
+        willChange: glide ? 'transform' : undefined,
       }}>
         {isMobile && (
           <div style={{ width: 300, flexShrink: 0, position: 'relative', overflow: 'visible' }}>
@@ -415,6 +532,18 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
           </div>
         ))}
       </div>
+
+      {glide && (
+        // slim scrollbar for glide mode (the board itself no longer scrolls)
+        <div ref={barRef} data-clickable style={{
+          position: 'fixed', left: 8, right: 8, bottom: 2, height: 9, zIndex: 30, cursor: 'default',
+        }}>
+          <div ref={thumbRef} style={{
+            position: 'absolute', left: 0, top: 0, height: 9, width: 0, borderRadius: 6,
+            background: 'rgba(255,255,255,0.16)', willChange: 'transform',
+          }} />
+        </div>
+      )}
 
       {!locked && (
         <div style={{

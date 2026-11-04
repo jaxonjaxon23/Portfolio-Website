@@ -113,25 +113,78 @@ const DEPTH_BG = 'images/about/depth-bg.png';
 // Shapes of videos seen so far, so a placeholder can keep a video's size.
 const videoShapes = new Map();
 
-// While a gallery is scrolling, its playing videos pause and resume ~0.15 s
-// after it stops. Decoding HD video while scrolling was the cause of dropped
-// frames (measured: 42 slow frames in 4 s with videos playing vs 1 without).
-const scrollPause = { active: false, timer: 0, paused: new Set() };
-function noteGalleryScroll(root) {
-  if (!scrollPause.active) {
-    scrollPause.active = true;
-    (root || document).querySelectorAll('video').forEach((v) => {
-      if (!v.paused) { v.pause(); scrollPause.paused.add(v); }
+
+// Desktop browsers (Edge especially) drop the WHOLE page to the video's ~30fps
+// while a <video> plays in it, so scrolling and the background light lose every
+// other frame. Instead each video plays off-page and its frames are painted onto
+// a canvas, which keeps the page at the full display rate (measured in Edge:
+// 0 slow frames vs ~1 in 2). Touch devices keep a plain <video>: iOS is strict
+// about off-page playback. ?canvasvideo=0 / =1 forces it off / on for testing.
+const CANVAS_VIDEO = (() => {
+  try {
+    const q = /[?&]canvasvideo=([01])/.exec(location.search);
+    if (q) return q[1] === '1';
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return !iOS && window.matchMedia('(pointer: fine)').matches && !!document.createElement('canvas').getContext;
+  } catch (_) { return false; }
+})();
+
+function CanvasVideo({ item, radius }) {
+  const ref = usePRef(null);
+  const d = dimsFor(item) || videoShapes.get(item.src);
+  usePEffect(() => {
+    const c = ref.current; if (!c) return;
+    const ctx = c.getContext('2d');
+    const v = document.createElement('video');   // never added to the page
+    v.muted = true; v.defaultMuted = true; v.loop = true; v.playsInline = true; v.preload = 'auto';
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+    v.src = item.src;
+    const hasRVFC = 'requestVideoFrameCallback' in v;
+    let alive = true, inView = false, cb = 0, raf = 0, lastT = -1;
+    const paint = () => { if (v.readyState >= 2 && c.width) ctx.drawImage(v, 0, 0, c.width, c.height); };
+    // canvas pixels = its on-screen size (max 2x), never more than the video has
+    const size = () => {
+      const w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
+      const k = Math.min(window.devicePixelRatio || 1, 2);
+      let W = Math.round(w * k), H = Math.round(h * k);
+      if (v.videoWidth && W > v.videoWidth) { H = Math.round(H * v.videoWidth / W); W = v.videoWidth; }
+      if (W !== c.width || H !== c.height) { c.width = W; c.height = H; paint(); }
+    };
+    // paint each new video frame: requestVideoFrameCallback where supported,
+    // otherwise a frame loop that only draws when the video has moved on
+    const onFrame = () => { cb = 0; paint(); if (alive) cb = v.requestVideoFrameCallback(onFrame); };
+    const tick = () => { raf = 0; if (v.currentTime !== lastT) { lastT = v.currentTime; paint(); } if (alive && !v.paused) raf = requestAnimationFrame(tick); };
+    if (hasRVFC) cb = v.requestVideoFrameCallback(onFrame);
+    const start = () => {
+      if (!alive || !inView || document.hidden) return;
+      const p = v.play(); if (p && p.catch) p.catch(() => {});
+      if (!hasRVFC && !raf) raf = requestAnimationFrame(tick);
+    };
+    v.addEventListener('loadedmetadata', () => {
+      if (v.videoWidth) {
+        videoShapes.set(item.src, [v.videoWidth, v.videoHeight]);
+        if (!dimsFor(item)) c.style.aspectRatio = v.videoWidth + ' / ' + v.videoHeight;
+      }
+      size();
     });
-  }
-  clearTimeout(scrollPause.timer);
-  scrollPause.timer = setTimeout(() => {
-    scrollPause.active = false;
-    scrollPause.paused.forEach((v) => {
-      if (v.isConnected && v.__inView) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
-    });
-    scrollPause.paused.clear();
-  }, 150);
+    v.addEventListener('loadeddata', paint);
+    v.addEventListener('playing', () => { if (!hasRVFC && !raf) raf = requestAnimationFrame(tick); });
+    // play only while on (or near) the screen and the tab is visible
+    const io = new IntersectionObserver((es) => es.forEach((e) => { inView = e.isIntersecting; if (inView) start(); else v.pause(); }), { rootMargin: '150px' });
+    io.observe(c);
+    const ro = new ResizeObserver(size); ro.observe(c);
+    const onVis = () => { if (document.hidden) v.pause(); else start(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      alive = false; io.disconnect(); ro.disconnect(); document.removeEventListener('visibilitychange', onVis);
+      if (cb && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(cb);
+      cancelAnimationFrame(raf);
+      v.pause(); v.removeAttribute('src'); v.load();   // release the decoder
+    };
+  }, [item.src]);
+  return <canvas ref={ref} role="img" aria-label={altFor(item)} data-video=""
+    style={{ display: 'block', width: '100%', height: 'auto', borderRadius: radius,
+      aspectRatio: d ? d[0] + ' / ' + d[1] : '4 / 5', background: 'rgba(255,255,255,0.04)' }} />;
 }
 
 function GalleryItem({ item, rounded, eager, preload, thumb, placeholder }) {
@@ -141,6 +194,7 @@ function GalleryItem({ item, rounded, eager, preload, thumb, placeholder }) {
     const d = dimsFor(item) || videoShapes.get(item.src) || [4, 5];
     return <div aria-hidden="true" style={{ width: '100%', aspectRatio: d[0] + ' / ' + d[1], borderRadius: radius, background: 'rgba(255,255,255,0.04)' }} />;
   }
+  if (item.type === 'video' && CANVAS_VIDEO) return <CanvasVideo item={item} radius={radius} />;
   if (item.type === 'video') {
     return (
       <video src={item.src} aria-label={altFor(item)} autoPlay loop muted playsInline preload="metadata"
@@ -152,10 +206,8 @@ function GalleryItem({ item, rounded, eager, preload, thumb, placeholder }) {
         el.__visObs = new IntersectionObserver((entries) => {
           entries.forEach((en) => {
             el.__inView = en.isIntersecting;
-            if (en.isIntersecting) {
-              if (scrollPause.active) scrollPause.paused.add(el);      // start once scrolling stops
-              else { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
-            } else el.pause();
+            if (en.isIntersecting) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+            else el.pause();
           });
         }, { rootMargin: '150px' });
         el.__visObs.observe(el);
