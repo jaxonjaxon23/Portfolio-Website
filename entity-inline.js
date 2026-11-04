@@ -103,4 +103,7 @@
     });
   };
 
+  // warm the cache for an entity that will be shown later
+  window.mountEntity.prefetch = function (url) { fetchDoc(url).catch(function () { delete cache[url]; }); };
+
 })();

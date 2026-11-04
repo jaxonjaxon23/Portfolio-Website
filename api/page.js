@@ -161,7 +161,10 @@ function workPage(c, p) {
       (p.medium ? '<p>Medium: ' + S.esc(S.plain(p.medium)) + '</p>' : '') +
       S.paras(p.desc).map((x) => '<p>' + S.esc(x) + '</p>').join('') +
       ((p.keywords || []).length ? '<p>Keywords: ' + S.esc(p.keywords.join(', ')) + '</p>' : '') +
-      imgs.map((g) => '<figure><img src="' + S.esc(S.abs(g.src)) + '" alt="' + S.esc(S.altText(c, p, g)) + '" loading="lazy" /></figure>').join('') +
+      // hidden: crawlers read the images and their descriptions, but a visitor's
+      // browser skips them (hidden lazy images never load) — the app shows its
+      // own, right-sized copies a moment later
+      (imgs.length ? '<div class="seo-gallery" hidden>' + imgs.map((g) => '<figure><img src="' + S.esc(S.abs(g.src)) + '" alt="' + S.esc(S.altText(c, p, g)) + '" loading="lazy" /></figure>').join('') + '</div>' : '') +
       '</article>' +
       '<aside>' + bioHtml(c, 'h2') + '</aside>' +
       (others.length ? '<section><h2>More projects</h2><ul>' + others.map((o) =>

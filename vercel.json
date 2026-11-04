@@ -2,18 +2,102 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "public",
+  "headers": [
+    {
+      "source": "/build/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/thumbs/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/sizes/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/assets/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000, stale-while-revalidate=31536000"
+        }
+      ]
+    },
+    {
+      "source": "/images/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800, stale-while-revalidate=2592000"
+        }
+      ]
+    },
+    {
+      "source": "/entities/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=2592000"
+        }
+      ]
+    }
+  ],
   "redirects": [
-    { "source": "/app.html", "destination": "/", "permanent": true }
+    {
+      "source": "/app.html",
+      "destination": "/",
+      "permanent": true
+    }
   ],
   "rewrites": [
-    { "source": "/", "destination": "/api/page" },
-    { "source": "/index.html", "destination": "/api/page" },
-    { "source": "/about", "destination": "/api/page?view=about" },
-    { "source": "/cv", "destination": "/api/page?view=cv" },
-    { "source": "/work/:id", "destination": "/api/page?project=:id" },
-    { "source": "/og/:id.jpg", "destination": "/api/og?id=:id" },
-    { "source": "/llms.txt", "destination": "/api/llms" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" }
+    {
+      "source": "/",
+      "destination": "/api/page"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/api/page"
+    },
+    {
+      "source": "/about",
+      "destination": "/api/page?view=about"
+    },
+    {
+      "source": "/cv",
+      "destination": "/api/page?view=cv"
+    },
+    {
+      "source": "/work/:id",
+      "destination": "/api/page?project=:id"
+    },
+    {
+      "source": "/og/:id.jpg",
+      "destination": "/api/og?id=:id"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/api/llms"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    }
   ],
   "functions": {
     "api/*.js": {

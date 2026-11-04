@@ -262,6 +262,9 @@ function dimsFor(item) {
 
 // Image that reserves its final shape (no layout jump) and fades in once it has
 // loaded and decoded, instead of popping in. Cached images show immediately.
+// How wide a project-page image shows: phones ~full width; desktop up to the
+// 1180px gallery beside the 408px info column.
+const GALLERY_SIZES = '(max-width: 767px) calc(100vw - 32px), min(1180px, calc(100vw - 432px))';
 function FadeImage({ item, radius, eager, preload, thumb }) {
   const src = thumb && window.thumbFor ? window.thumbFor(item.src) : item.src;
   const [shown, setShown] = usePState(() => loadedSrcs.has(src));
@@ -273,7 +276,12 @@ function FadeImage({ item, radius, eager, preload, thumb }) {
     else done();
   };
   return (
-    <img src={src} alt={altFor(item)} draggable="false"
+    // project pages: let the browser pick a 1280 / 1920px copy when that's sharp
+    // enough. sizes + srcSet must come BEFORE src: React sets attributes in this
+    // order, and an <img> starts downloading the moment it gets a src.
+    <img sizes={!thumb && dims ? GALLERY_SIZES : undefined}
+    srcSet={!thumb && dims && window.srcsetFor ? window.srcsetFor(item.src, dims[0]) : undefined}
+    src={src} alt={altFor(item)} draggable="false"
     // eager: first screen (high priority); preload: columns about to scroll into view
     loading={eager || preload ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined}
     width={dims ? dims[0] : undefined} height={dims ? dims[1] : undefined}

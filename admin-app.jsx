@@ -316,8 +316,18 @@ function App() {
       const replace = {};
       for (const path of newImagePaths) {
         if (!map[path] || !map[path].file) continue;
-        const key = path.replace(/^images\//, '');
-        const up = await SB.storage.from('images').upload(key, map[path].file, { upsert: true, contentType: map[path].file.type || undefined });
+        // Never overwrite a stored file: its URL may be cached by browsers and
+        // the CDN for a long time, so a replaced file could keep showing the old
+        // picture. If the name is taken (e.g. an image removed from the site
+        // earlier still sits in storage), count up: cure-jaxon-stickler-4.webp…
+        let key = path.replace(/^images\//, ''), up;
+        for (let n = 0; n < 50; n++) {
+          up = await SB.storage.from('images').upload(key, map[path].file, {
+            upsert: false, cacheControl: '31536000', contentType: map[path].file.type || undefined });
+          const taken = up.error && (String(up.error.statusCode) === '409' || /exist|duplicate/i.test(up.error.message || ''));
+          if (!taken) break;
+          key = key.replace(/(?:-(\d+))?(\.[^./]+)?$/, (m, num, ext) => '-' + ((Number(num) || 1) + 1) + (ext || ''));
+        }
         if (up.error) throw new Error('Image upload failed: ' + up.error.message);
         const { data: pub } = SB.storage.from('images').getPublicUrl(key);
         replace[path] = pub.publicUrl;

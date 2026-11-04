@@ -39,6 +39,29 @@
     return src;
   };
 
+  // Screen-size choices for a project-page image (an <img srcset>): the 1280 /
+  // 1920px copies made at deploy (window.MEDIA_SIZES), or made on demand by
+  // api/thumb for images uploaded since, plus the original. The browser picks
+  // the smallest that is sharp on the visitor's screen. `w` = original width.
+  window.srcsetFor = function (src, w) {
+    if (!src || !(w > 0)) return undefined;
+    var list = [];
+    var made = window.MEDIA_SIZES && window.MEDIA_SIZES[src];
+    if (made) made.forEach(function (s) { list.push(s[1] + ' ' + s[0] + 'w'); });
+    else if (!/\.gif(\?|$)/i.test(src) &&
+      (/^images\//i.test(src) || /\/storage\/v1\/object\/public\/images\//.test(src))) {
+      [1280, 1920].forEach(function (n) {
+        if (w > n * 1.15) list.push('api/thumb?w=' + n + '&src=' + encodeURIComponent(src) + ' ' + n + 'w');
+      });
+    }
+    if (!list.length) return undefined;
+    // the original is the largest choice — unless a copy is already full size
+    // (an animated GIF swapped for an animated WebP): then never use the original
+    if (!(made && made.some(function (m) { return m[0] >= w; })))
+      list.push(src.replace(/ /g, '%20') + ' ' + w + 'w');   // spaces would split the list
+    return list.join(', ');
+  };
+
   // Lite mode for low-power machines: static background, 2 preview images per
   // column. On when the device reports little memory/CPU or data saver;
   // app.jsx also switches it on for a sustained low frame rate.

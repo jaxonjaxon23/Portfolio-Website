@@ -259,6 +259,18 @@ function App() {
   // cloud on its last frame instead of redrawing it every frame.
   const onProject = !!project;
 
+  // The large entity is only on the About page: load it the first time About
+  // opens, and fetch its file quietly once the landing page has settled, so
+  // that first visit doesn't wait for it.
+  const [aboutSeen, setAboutSeen] = useState(isAbout);
+  useEffect(() => { if (isAbout) setAboutSeen(true); }, [isAbout]);
+  useEffect(() => {
+    if (isMobile || aboutSeen || !window.mountEntity || !window.mountEntity.prefetch) return;
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1));
+    const t = setTimeout(() => idle(() => window.mountEntity.prefetch('entities/vector-entity-2.html')), 6000);
+    return () => clearTimeout(t);
+  }, [isMobile, aboutSeen]);
+
   // Page title per view (tabs, bookmarks, and how search engines label the page)
   useEffect(() => {
     const bio = (window.SITE_CONTENT && window.SITE_CONTENT.bio) || {};
@@ -328,8 +340,9 @@ function App() {
         </React.Fragment>
       }
 
-      {/* Entity 2 stays mounted across pages so it never pops back in */}
-      {!isMobile &&
+      {/* Entity 2 (About page only, ~260 KB) mounts on the first About visit,
+          then stays mounted so it never pops back in */}
+      {!isMobile && aboutSeen &&
       <KeepAlive active={isAbout}>
           <LargeEntity locked={t.nodesLocked} />
         </KeepAlive>
