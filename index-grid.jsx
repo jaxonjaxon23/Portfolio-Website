@@ -261,39 +261,38 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
   const liteRef = useIRef(lite);
   liteRef.current = lite;
 
-  // Wheel → horizontal scroll (eased; direct in lite mode); mouse drag to pan
+  // Vertical wheel → horizontal scroll; mouse drag to pan.
+  // The smoothing is left to the browser (scrollTo smooth), which animates on
+  // its compositor thread. The old per-frame JS easing ran on the main thread,
+  // so any image decode or paint there dropped a frame (measured: 19 slow
+  // frames per 5 s of scrolling vs 2 with the browser's own animation).
   useIEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Eased position is tracked in `pos` (not re-read from scrollLeft, which the
-    // browser snaps to device pixels and would stall the ease short of target).
-    let pos = el.scrollLeft, targetLeft = pos, raf = 0;
-    const stop = () => { cancelAnimationFrame(raf); raf = 0; };
-    const tick = () => {
-      pos += (targetLeft - pos) * 0.14;
-      if (Math.abs(targetLeft - pos) < 0.5) pos = targetLeft;
-      el.scrollLeft = pos;
-      raf = pos === targetLeft ? 0 : requestAnimationFrame(tick);
-    };
+    let target = el.scrollLeft, lastWheel = 0;
+    const stop = () => { target = el.scrollLeft; };
     const onWheel = (e) => {
       if (e.ctrlKey) return;            // let pinch-zoom through
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        if (liteRef.current) {            // lite: no per-frame easing work
-          el.scrollLeft += wheelPx(e.deltaY, e.deltaMode, el.clientWidth);
-          e.preventDefault();
-          return;
-        }
-        if (!raf) pos = targetLeft = el.scrollLeft;
-        const max = el.scrollWidth - el.clientWidth;
-        targetLeft = Math.max(0, Math.min(max, targetLeft + wheelPx(e.deltaY, e.deltaMode, el.clientWidth)));
-        e.preventDefault();
-        if (!raf) raf = requestAnimationFrame(tick);
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // sideways trackpad swipe: native
+      e.preventDefault();
+      const delta = wheelPx(e.deltaY, e.deltaMode, el.clientWidth);
+      const max = el.scrollWidth - el.clientWidth;
+      // trackpads / precise wheels send many small steps that are already
+      // smooth, and lite mode skips the animation: move directly
+      if (liteRef.current || (e.deltaMode === 0 && Math.abs(e.deltaY) < 50)) {
+        el.scrollLeft = Math.max(0, Math.min(max, el.scrollLeft + delta));
+        target = el.scrollLeft;
+        return;
       }
+      const now = performance.now();
+      if (now - lastWheel > 300) target = el.scrollLeft;   // new gesture: start from where we are
+      lastWheel = now;
+      target = Math.max(0, Math.min(max, target + delta));
+      el.scrollTo({ left: target, behavior: 'smooth' });
     };
-    // Something else moved the board mid-ease (trackpad swipe, scrollbar) — yield to it.
-    const onScroll = () => { if (raf && Math.abs(el.scrollLeft - pos) > 2) stop(); };
     el.addEventListener('wheel', onWheel, { passive: false });
-    el.addEventListener('scroll', onScroll, { passive: true });
+    const onBoardScroll = () => noteGalleryScroll(el);   // pause videos while moving
+    el.addEventListener('scroll', onBoardScroll, { passive: true });
     let down = false, startX = 0, startScroll = 0;
     const onDown = (e) => {
       if (e.target && e.target.closest && e.target.closest('[data-clickable]')) return;
@@ -309,7 +308,7 @@ function IndexGrid({ cardMode, imageLimit, locked, onOpen, onHover, isMobile = f
     window.addEventListener('mouseup', onUp);
     return () => {
       el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('scroll', onBoardScroll);
       el.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);

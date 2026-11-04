@@ -82,6 +82,27 @@ const DEPTH_BG = 'images/about/depth-bg.png';
 // Shapes of videos seen so far, so a placeholder can keep a video's size.
 const videoShapes = new Map();
 
+// While a gallery is scrolling, its playing videos pause and resume ~0.15 s
+// after it stops. Decoding HD video while scrolling was the cause of dropped
+// frames (measured: 42 slow frames in 4 s with videos playing vs 1 without).
+const scrollPause = { active: false, timer: 0, paused: new Set() };
+function noteGalleryScroll(root) {
+  if (!scrollPause.active) {
+    scrollPause.active = true;
+    (root || document).querySelectorAll('video').forEach((v) => {
+      if (!v.paused) { v.pause(); scrollPause.paused.add(v); }
+    });
+  }
+  clearTimeout(scrollPause.timer);
+  scrollPause.timer = setTimeout(() => {
+    scrollPause.active = false;
+    scrollPause.paused.forEach((v) => {
+      if (v.isConnected && v.__inView) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+    });
+    scrollPause.paused.clear();
+  }, 150);
+}
+
 function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
   const radius = rounded ? 4 : 0;
   if (placeholder && (item.type === 'image' || item.type === 'video')) {
@@ -99,8 +120,11 @@ function GalleryItem({ item, rounded, eager, thumb, placeholder }) {
         // pause when off screen — decoding hidden loops is pure waste
         el.__visObs = new IntersectionObserver((entries) => {
           entries.forEach((en) => {
-            if (en.isIntersecting) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
-            else el.pause();
+            el.__inView = en.isIntersecting;
+            if (en.isIntersecting) {
+              if (scrollPause.active) scrollPause.paused.add(el);      // start once scrolling stops
+              else { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+            } else el.pause();
           });
         }, { rootMargin: '150px' });
         el.__visObs.observe(el);
