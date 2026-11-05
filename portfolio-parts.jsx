@@ -94,6 +94,19 @@ function wheelPx(delta, deltaMode, pageSize) {
 // browser and restarts its animation on every wheel notch (felt as judder).
 // get/set read and write the scroll position (board: scrollLeft, page: scrollY).
 const SCROLL_EASE = 0.075;   // fraction per 60 fps frame: ~0.6 s glide; higher = snappier
+// Touchpads send a fast stream of small, uneven steps; following them too
+// closely shows every unevenness as jitter. A softer follow smooths them out.
+const TRACKPAD_EASE = 0.1;
+
+// Mouse wheel or touchpad? A wheel moves in notches: wheelDelta in whole steps
+// of 120 (Firefox: line units instead). Touchpads report uneven pixel
+// amounts. (Guessing from the step size flipped mid-swipe: a touchpad swipe
+// mixes small and large steps, so its speed kept switching — jitter.)
+function wheelKind(e) {
+  if (e.deltaMode !== 0) return 'mouse';
+  const w = e.wheelDeltaY || 0;
+  return !e.deltaX && w && w % 120 === 0 ? 'mouse' : 'trackpad';
+}
 function createSmoothScroller(get, set, max) {
   let pos = get(), target = pos, raf = 0, lastT = 0, writing = false;
   const frame = (t) => {
@@ -707,7 +720,7 @@ function MobileEntityAnchor({ which }) {
 }
 
 Object.assign(window, {
-  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer, MobileEntityAnchor, ViewLink,
+  FONT, useMobile, GalleryItem, CustomCursor, LocationSignifier, BioShort, Footer, MobileEntityAnchor, ViewLink, wheelKind,
   DepthCloud: DepthCloudMemo,
   AnimatedEntity: AnimatedEntityMemo,
   LargeEntity: LargeEntityMemo,

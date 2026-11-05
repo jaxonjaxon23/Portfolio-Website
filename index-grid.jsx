@@ -182,15 +182,13 @@ function IndexGrid({ cardMode, imageLimit, onHover, isMobile = false, locationSt
 
     const onWheel = (e) => {
       if (e.ctrlKey) return;                                   // pinch-zoom
-      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-      const raw = horizontal ? e.deltaX : e.deltaY;
+      // both axes together: a downward swipe that drifts sideways keeps going
+      // the same way (picking the larger axis per event could briefly flip it)
+      const raw = e.deltaX + e.deltaY;
       if (!raw) return;
       e.preventDefault();
-      const delta = wheelPx(raw, e.deltaMode, el.clientWidth);
-      // trackpads send many small, fractional steps: follow them closely;
-      // mouse wheels send big notches: glide softly
-      const trackpad = e.deltaMode === 0 && (Math.abs(raw) < 40 || raw % 1 !== 0 || horizontal);
-      by(delta, trackpad ? 0.35 : SCROLL_EASE);
+      // mouse wheels: big notches, glide softly; touchpads: steady, softened follow
+      by(wheelPx(raw, e.deltaMode, el.clientWidth), wheelKind(e) === 'mouse' ? SCROLL_EASE : TRACKPAD_EASE);
     };
     let dragging = null;   // { from: 'board' | 'bar', x0, start }
     const onDown = (e) => {
